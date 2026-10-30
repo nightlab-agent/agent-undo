@@ -10,8 +10,10 @@ const ROOT = '/proj'
 // A diff of `before` to `after` as the engine's structuredPatch gives it: one hunk per
 // changed run, three lines of context, like Claude Code's own.
 const patchOf = (before: string, after: string) => {
-  const a = before.split('\n')
-  const b = after.split('\n')
+  // Lines as a diff counts them: a final newline ends the last line, it does not start another.
+  const linesOf = (t: string) => (t === '' ? [] : (t.endsWith('\n') ? t.slice(0, -1) : t).split('\n'))
+  const a = linesOf(before)
+  const b = linesOf(after)
   let head = 0
   while (head < a.length && head < b.length && a[head] === b[head]) head++
   let tail = 0
@@ -133,7 +135,7 @@ test('look-alikes: the same lines in two places, only the place the edit left th
   const h = { before: ['x', 'Y', 'z'], after: block, line: 9 }
   const text = ['a', 'b', 'c', 'd', ...block, 'e', ...block].join('\n')
   const got = undoHunk(text, h)
-  expect(got).toEqual({ text: ['a', 'b', 'c', 'd', ...block, 'e', 'x', 'Y', 'z'].join('\n') })
+  expect('text' in got && got.text).toEqual( ['a', 'b', 'c', 'd', ...block, 'e', 'x', 'Y', 'z'].join('\n'))
   // Moved off its line and found twice: no guess.
   const moved = ['q', ...text.split('\n')].join('\n')
   expect('refused' in undoHunk(moved, h)).toBe(true)
@@ -141,7 +143,8 @@ test('look-alikes: the same lines in two places, only the place the edit left th
 
 test('keeps Windows line endings', () => {
   const h = hunksOf([{ newStart: 1, lines: [' a', '-b', '+B', ' c'] }])[0]!
-  expect(undoHunk('a\r\nB\r\nc\r\n', h)).toEqual({ text: 'a\r\nb\r\nc\r\n' })
+  const got = undoHunk('a\r\nB\r\nc\r\n', h)
+  expect('text' in got && got.text).toBe('a\r\nb\r\nc\r\n')
 })
 
 test('a subagent\'s edit is listed with its agent, and undoes like any other', async ($, on) => {

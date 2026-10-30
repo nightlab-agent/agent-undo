@@ -7,47 +7,81 @@ const MAX_CHANGES = 300
 const MAX_LINES = 4000
 
 // Change the tag when a Change's fields change: it declines what an earlier version stored.
-const changes = atom({ plugin: 'agent-undo', key: 'changes' } as const, [], { shape: 'changes-1' })
+const changes = atom({ plugin: 'agent-undo', key: 'changes' } as const, [], { shape: 'changes-2' })
 
 type Patch = { newStart: number; lines: string[] }[]
 
 /** Each hunk of an engine diff as the lines before and after it, context included. */
 export const hunksOf = (patch: Patch): Hunk[] =>
   patch.map(p => {
-    const before: string[] = []
-    const after: string[] = []
+    const h: Hunk = { before: [], after: [], line: p.newStart }
+    let prev = ' '
     for (const l of p.lines) {
-      if (l.startsWith('\\')) continue
-      const body = l.slice(1)
-      if (l[0] !== '+') before.push(body)
-      if (l[0] !== '-') after.push(body)
+      // "\ No newline at end of file" follows the last line of the side(s) it belongs to.
+      if (l.startsWith('\\')) {
+        if (prev !== '+') h.beforeNoEol = true
+        if (prev !== '-') h.afterNoEol = true
+        continue
+      }
+      prev = l[0] ?? ' '
+      if (prev !== '+') h.before.push(l.slice(1))
+      if (prev !== '-') h.after.push(l.slice(1))
     }
-    return { before, after, line: p.newStart }
+    return h
   })
 
+type Row = { t: string; e: string }
+
+/** The file as lines, each with its own ending ('' for a last line without one). */
+const rowsOf = (text: string): Row[] => {
+  const parts = text.split(/(\r\n|\n)/)
+  const rows: Row[] = []
+  for (let k = 0; k < parts.length; k += 2) rows.push({ t: parts[k] ?? '', e: parts[k + 1] ?? '' })
+  const last = rows[rows.length - 1]
+  if (last && last.t === '' && last.e === '') rows.pop()
+  return rows
+}
+
 /**
- * The file's text with one hunk put back as it was, or why not. The hunk's after-lines must
- * still stand in the file, word for word: where the person (or a later edit) changed them,
- * nothing is touched. Found in more than one place, only the place the edit left them counts.
+ * The file's text with one hunk put back as it was, and where, or why not. The hunk's
+ * after-lines must still stand in the file, word for word: where the person (or a later edit)
+ * changed them, nothing is touched. Found in more than one place, only the place the edit left
+ * them counts. Every other line keeps its own line ending.
  */
-export const undoHunk = (text: string, hunk: Hunk): { text: string } | { refused: string } => {
-  const eol = text.includes('\r\n') ? '\r\n' : '\n'
-  const lines = text.split(/\r?\n/)
+const undoAt = (text: string, hunk: Hunk): { text: string; at: number } | { refused: string } => {
+  const rows = rowsOf(text)
+  const crlf = rows.filter(r => r.e === '\r\n').length
+  const eol = crlf > rows.filter(r => r.e === '\n').length ? '\r\n' : '\n'
   const { before, after } = hunk
-  if (after.length === 0) {
-    if (text !== '') return { refused: 'the file is no longer empty, as the edit left it' }
-    return { text: before.join(eol) }
-  }
   const at: number[] = []
-  for (let i = 0; i + after.length <= lines.length; i++) {
-    if (after.every((l, j) => lines[i + j] === l)) at.push(i)
+  if (after.length === 0) {
+    if (rows.length > 0) return { refused: 'the file is no longer empty, as the edit left it' }
+    at.push(0)
+  }
+  for (let i = 0; after.length > 0 && i + after.length <= rows.length; i++) {
+    if (after.every((l, j) => rows[i + j]!.t === l)) at.push(i)
   }
   if (at.length === 0) return { refused: 'those lines have changed since the edit' }
   const expected = hunk.line - 1
-  const i = at.length === 1 ? at[0] : at.includes(expected) ? expected : undefined
+  const i = at.length === 1 ? at[0]! : at.includes(expected) ? expected : undefined
   if (i === undefined) return { refused: `those lines appear ${at.length} times and none where the edit left them` }
-  lines.splice(i, after.length, ...before)
-  return { text: lines.join(eol) }
+  const atEnd = i + after.length === rows.length
+  const put: Row[] = before.map((t, j) => {
+    const e = j < after.length ? rows[i + j]!.e : eol
+    return { t, e: e === '' ? eol : e }
+  })
+  const lastPut = put[put.length - 1]
+  // The final newline: as the diff says the file had it before the edit; else as the file has it now.
+  if (atEnd && lastPut) {
+    lastPut.e = hunk.beforeNoEol ? '' : hunk.afterNoEol || rows.length === 0 ? eol : rows[rows.length - 1]!.e
+  }
+  rows.splice(i, after.length, ...put)
+  return { text: rows.map(r => r.t + r.e).join(''), at: i }
+}
+
+export const undoHunk = (text: string, hunk: Hunk): { text: string } | { refused: string } => {
+  const got = undoAt(text, hunk)
+  return 'refused' in got ? got : { text: got.text }
 }
 
 /** The change number and hunk number of `3` or `3.2`. */
@@ -57,7 +91,21 @@ export const parseRef = (arg: string): { n: number; h?: number } | undefined => 
   return { n: Number(m[1]), h: m[2] === undefined ? undefined : Number(m[2]) }
 }
 
-const time = (iso: string) => iso.slice(11, 19)
+const time = (iso: string) => {
+  const d = new Date(iso)
+  return [d.getHours(), d.getMinutes(), d.getSeconds()].map(x => String(x).padStart(2, '0')).join(':')
+}
+
+const slashed = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '')
+
+// One undo at a time, and no Edit or Write runs while one does: an undo reads a file and writes
+// it back, and an edit landing in between would be lost.
+let queue: Promise<unknown> = Promise.resolve()
+const serial = <T,>(f: () => Promise<T>): Promise<T> => {
+  const p = queue.then(f, f)
+  queue = p.catch(() => undefined)
+  return p
+}
 
 const counted = (h: Hunk) => {
   // Context lines are the common head and tail of before and after.
@@ -100,13 +148,13 @@ async function record($: EngineInterface, c: Omit<Change, 'n'>) {
   })
   const all = await read($, changes)
   const last = all[all.length - 1]
-  if (last) $.ui.status(`agent-undo: #${last.n} ${last.file.split(/[\\/]/).pop()} (${last.hunks.length} hunk${last.hunks.length === 1 ? '' : 's'}) · /agent-undo`)
+  if (last) $.ui.status(`#${last.n} ${last.file.split(/[\\/]/).pop()} (${last.hunks.length} hunk${last.hunks.length === 1 ? '' : 's'}) · /agent-undo`)
 }
 
 /** What `/agent-undo <args>` and the undo tool answer: the list, or the outcome of one undo. */
 async function run($: EngineInterface, args: string): Promise<string> {
-  const root = (await $.session.root()).replace(/[\\/]+$/, '')
-  const shown = (f: string) => (f.startsWith(`${root}/`) ? f.slice(root.length + 1) : f)
+  const root = slashed(await $.session.root())
+  const shown = (f: string) => (slashed(f).startsWith(`${root}/`) ? slashed(f).slice(root.length + 1) : f)
   const arg = args.trim()
   const list = await read($, changes)
   if (arg === '' || arg === 'list') return listing(list, shown)
@@ -121,19 +169,23 @@ async function run($: EngineInterface, args: string): Promise<string> {
   let text = await $.fs.read(c.file)
   const undone: number[] = []
   const notes: string[] = []
+  const hs = c.hunks.map(h => ({ ...h }))
   // Last hunk first, so each recorded line number still points at its own hunk.
   for (const k of [...picked].sort((a, b) => b - a)) {
-    const h = c.hunks[k]!
+    const h = hs[k]!
     if (h.undone) { notes.push(`${c.n}.${k + 1} was already undone`); continue }
-    const got = undoHunk(text, h)
+    const got = undoAt(text, h)
     if ('refused' in got) { notes.push(`${c.n}.${k + 1} left as is: ${got.refused}`); continue }
     text = got.text
     undone.push(k)
+    // Later hunks of this edit moved by the lines this one put back.
+    const delta = h.before.length - h.after.length
+    for (const o of hs) if (o !== h && o.line - 1 > got.at) o.line += delta
   }
   if (undone.length > 0) {
     await $.fs.write(c.file, text)
     await update($, changes, all => all.map(x => x.n !== c.n ? x : {
-      ...x, hunks: x.hunks.map((h, k) => (undone.includes(k) ? { ...h, undone: true } : h)),
+      ...x, hunks: hs.map((h, k) => (undone.includes(k) ? { ...h, undone: true } : h)),
     }))
   }
   const did = undone.length > 0
@@ -161,9 +213,9 @@ export const register: Register = on => {
   })
 
   on('tool.call', { tool: 'Edit' }, async ($, e, next) => {
-    const done = await next(e)
+    const done = await serial(() => next(e))
     try {
-      if (done.deny !== undefined || done.isError || !done.result) return done
+      if (done.deny !== undefined || done.isError || !done.result || done.result.staged) return done
       const out = done.result
       const hunks = hunksOf(out.structuredPatch ?? [])
       await record($, {
@@ -177,9 +229,9 @@ export const register: Register = on => {
   })
 
   on('tool.call', { tool: 'Write' }, async ($, e, next) => {
-    const done = await next(e)
+    const done = await serial(() => next(e))
     try {
-      if (done.deny !== undefined || done.isError || !done.result) return done
+      if (done.deny !== undefined || done.isError || !done.result || done.result.staged) return done
       const out = done.result
       const created = out.type === 'create'
       const hunks = created ? [] : hunksOf(out.structuredPatch ?? [])
@@ -193,10 +245,10 @@ export const register: Register = on => {
     return done
   })
 
-  on('command.run', { command: 'agent-undo' }, async ($, e) => ({ text: await run($, e.args) }))
+  on('command.run', { command: 'agent-undo' }, async ($, e) => ({ text: await serial(() => run($, e.args)) }))
 
   on('tool.call', { tool: 'mcp__agent-undo__undo' }, async ($, e) => {
     const ref = (e as unknown as { ref?: unknown }).ref
-    return { result: await run($, typeof ref === 'string' ? ref : '') } as never
+    return { result: await serial(() => run($, typeof ref === 'string' ? ref : '')) } as never
   })
 }

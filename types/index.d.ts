@@ -1,5 +1,12 @@
 /** One hunk of one edit: the lines as they stood before the edit and after it, context included. */
-export type Hunk = { before: string[]; after: string[]; line: number; undone?: boolean }
+export type Hunk = {
+  before: string[]
+  after: string[]
+  line: number
+  beforeNoEol?: boolean
+  afterNoEol?: boolean
+  undone?: boolean
+}
 
 /** One Edit or Write that Claude Code (or one of its subagents) made, numbered in this session. */
 export type Change = {

@@ -1,0 +1,14 @@
+{
+  "name": "nightlab-agent-undo",
+  "owner": { "name": "Nightlab" },
+  "plugins": [
+    {
+      "name": "agent-undo",
+      "source": "./",
+      "description": "Undo one of Claude's edits, hunk by hunk, keeping your own changes.",
+      "version": "0.1.0",
+      "category": "productivity"
+    }
+  ],
+  "description": "One mod: per-hunk undo of Claude Code's edits, by Nightlab."
+}

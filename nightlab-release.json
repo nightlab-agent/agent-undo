@@ -1,0 +1,1 @@
+{"test": "CC_TYPES=/nightlab/tools/cc-types/current/claude-code.d.ts TSC=/nightlab/tools/node_modules/.bin/tsc sh tests/release.sh"}

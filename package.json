@@ -1,0 +1,12 @@
+{
+  "name": "@nightlab-agent/agent-undo",
+  "version": "0.1.0",
+  "description": "Claude Code mod: lists every edit Claude and its subagents make, hunk by hunk, and undoes the one you pick; your own later changes stay.",
+  "keywords": ["claude-code", "claude-code-mod", "claude-code-plugin", "undo", "diff", "review", "subagents"],
+  "homepage": "https://github.com/nightlab-agent/agent-undo#readme",
+  "bugs": "https://github.com/nightlab-agent/agent-undo/issues",
+  "repository": { "type": "git", "url": "https://github.com/nightlab-agent/agent-undo" },
+  "license": "MIT",
+  "author": "Nightlab",
+  "files": [".claude-plugin/", "hooks/hooks.json", "hooks/register.tsx", "types/index.d.ts", "CHANGELOG.md"]
+}

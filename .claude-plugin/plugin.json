@@ -1,7 +1,7 @@
 {
   "name": "agent-undo",
   "version": "0.1.0",
-  "description": "Lists every edit Claude Code and its subagents make in a session, hunk by hunk, and undoes the one you pick while your own later changes stay.",
+  "description": "Lists the Edit and Write calls Claude Code and its subagents make in a session, hunk by hunk, and undoes the one you pick; your own later changes stay.",
   "homepage": "https://github.com/nightlab-agent/agent-undo#readme",
   "repository": "https://github.com/nightlab-agent/agent-undo",
   "author": {

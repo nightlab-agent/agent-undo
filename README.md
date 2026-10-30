@@ -14,7 +14,7 @@ This mod (a plugin that changes what Claude Code does) records each Edit and
 Write that Claude and its subagents make in the session, from Claude Code's
 own diff of that edit, and numbers each hunk:
 
-![Claude Code listing three edits with agent-undo, one by a subagent, then undoing only edit 2.1](https://raw.githubusercontent.com/nightlab-agent/agent-undo/466cdb1efababee1ebf65d702dc2d8118920e030/docs/preview.png)
+![Claude Code listing three edits with agent-undo, one by a subagent, then undoing only edit 2.1](https://raw.githubusercontent.com/nightlab-agent/agent-undo/980737cae160614a1e670549111ce85fc47d63ac/docs/preview.png)
 
 Seen in a Claude Code 2.1.312 terminal (120 columns) on 2026-10-30. Claude
 made two edits, then a subagent made a third. Asked to "use the agent-undo

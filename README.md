@@ -13,26 +13,29 @@ This mod (a plugin that changes what Claude Code does) records each Edit and
 Write that Claude and its subagents make in the session, from Claude Code's
 own diff of that edit, and numbers each hunk:
 
-```
-#2 14:05:12 Edit src/shop.py (subagent a1b2c3d4)
-   2.1 line 8: -1 +2  # Sum of prices, tax included.
-#1 14:04:51 Edit src/shop.py
-   1.1 line 4: -1 +1  return round(item["cost"] * (1 + TAX), 2)
-Undo one: /agent-undo 3.1   all of one edit: /agent-undo 3
-```
+![Claude Code listing three edits with agent-undo, one by a subagent, then undoing only edit 2.1](https://raw.githubusercontent.com/nightlab-agent/agent-undo/466cdb1efababee1ebf65d702dc2d8118920e030/docs/preview.png)
 
-- `/agent-undo` lists them, newest first; `/agent-undo 2.1` undoes one hunk;
+Seen in a Claude Code 2.1.312 terminal (120 columns) on 2026-10-30. Claude
+made two edits, then a subagent made a third. Asked to "undo only the comment
+above total()", Claude listed them and undid 2.1. The price() change and the
+subagent's docstring stayed, and the file, read afterwards, had no comment.
+The status line shows the newest edit.
+
+- `/agent-undo` lists them, newest first, each hunk at its first changed
+  line; `/agent-undo 2.1` undoes one hunk;
   `/agent-undo 2` undoes all of edit 2.
 - Or ask Claude in words ("undo the comment you added to total"): it gets a
   tool for the same list and undo, and tells you the outcome line.
 - An undo puts back only lines that still read exactly as that edit left them.
-  If you (or a later edit) changed those lines, it says so and changes nothing.
+  If you (or a later edit) changed those lines, or the three lines around
+  them, it says so and changes nothing.
   Your edits elsewhere in the file stay.
 - A file Claude created is listed, never deleted.
 - Only this session's edits; nothing leaves your machine. Bash commands that
   change files are not seen (they are not Edit or Write calls).
 
-The listing above is written out by hand; it has not yet been seen on a screen.
+`/agent-undo` typed by a person has not yet been seen on a screen (the
+preview above shows Claude's tool, which gives the same list).
 
 ## What it writes
 

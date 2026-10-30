@@ -80,8 +80,8 @@ test('lists each edit with its hunks, newest first, paths from the project', asy
   const text = await undo($, '')
   expect(text.indexOf('#2 ')).toBeLessThan(text.indexOf('#1 '))
   expect(text).toContain('Edit app.ts')
-  expect(text).toContain('2.1 line 5: -1 +2  return 20')
-  expect(text).toContain('1.1 line 1: -1 +1  return 10')
+  expect(text).toContain('2.1 line 8: -1 +2  return 20')
+  expect(text).toContain('1.1 line 4: -1 +1  return 10')
 })
 
 test('undoes one hunk and keeps the person\'s own change elsewhere in the file', async ($, on) => {

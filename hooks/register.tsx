@@ -117,7 +117,7 @@ const counted = (h: Hunk) => {
   const added = h.after.slice(head, h.after.length - tail)
   const removed = h.before.slice(head, h.before.length - tail)
   const first = (added.find(l => l.trim() !== '') ?? removed.find(l => l.trim() !== '') ?? '').trim()
-  return { minus: removed.length, plus: added.length, first: first.length > 50 ? `${first.slice(0, 49)}…` : first }
+  return { head, minus: removed.length, plus: added.length, first: first.length > 50 ? `${first.slice(0, 49)}…` : first }
 }
 
 /** The list, newest change first, each hunk numbered `<change>.<hunk>`. */
@@ -129,8 +129,8 @@ export const listing = (list: readonly Change[], shown: (file: string) => string
     const note = c.created ? ' (new file)' : c.tooLarge ? ' (too large to undo here)' : ''
     out.push(`#${c.n} ${time(c.at)} ${c.tool} ${shown(c.file)}${who}${note}`)
     c.hunks.forEach((h, k) => {
-      const { minus, plus, first } = counted(h)
-      out.push(`   ${c.n}.${k + 1} line ${h.line}: -${minus} +${plus}${first ? `  ${first}` : ''}${h.undone ? '  (undone)' : ''}`)
+      const { head, minus, plus, first } = counted(h)
+      out.push(`   ${c.n}.${k + 1} line ${h.line + head}: -${minus} +${plus}${first ? `  ${first}` : ''}${h.undone ? '  (undone)' : ''}`)
     })
   }
   if (list.length > limit) out.push(`… ${list.length - limit} older`)

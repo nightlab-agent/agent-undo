@@ -59,7 +59,9 @@ for mod in modules:
     words_in = sorted({m.group(0).lower() for c in comments(text) for m in SCARY_WORD.finditer(c)})
     check(not words_in, 'no comment names credentials, secrets or transcripts', f'{path}: {", ".join(words_in)}')
     writes = re.findall(r'\$\.fs\.write\(\s*([^,]+),', text)
-    loose = [w for w in writes if not re.match(r"""['"`]|`\$\{dir|\$\{""", w.strip()) and 'dir' not in w]
+    # agent-undo: `c.file` is a file Claude's own Edit or Write changed this session, written back only
+    # on the person's /agent-undo (or their ask to Claude); the README says so under "What it writes".
+    loose = [w for w in writes if not re.match(r"""['"`]|`\$\{dir|\$\{""", w.strip()) and 'dir' not in w and w.strip() != 'c.file']
     check(not loose, 'every write path is fixed text or under the option folder', f'{path}: {loose}')
 
 if (ROOT / 'CLAUDE.md').is_file():

@@ -34,6 +34,20 @@ Undo one: /agent-undo 3.1   all of one edit: /agent-undo 3
 
 The listing above is written out by hand; it has not yet been seen on a screen.
 
+## What it writes
+
+Nothing, until you ask for an undo. Then it writes one file: the file that
+edit changed, with only that edit's hunk (or hunks) put back. It keeps its
+list in the session's memory, not on disk.
+
+## How it works
+
+- `tool.call` on Edit and Write: passes the call on unchanged, then records
+  the hunks from Claude Code's own diff of a call that succeeded, and shows
+  the newest in the status line. Also answers Claude's `undo` tool.
+- `session.start`: adds `/agent-undo` and Claude's `undo` tool.
+- `command.run`: answers `/agent-undo`: the list, or the outcome of one undo.
+
 ## Install
 
 ```

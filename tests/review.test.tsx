@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { TestBody } from 'claude-code/testing'
 import { undoHunk } from '../hooks/register'
 
-// Review tests (critic pass, 2026-10-30). Each finding: a FAILING test beside a PASSING
+// Review tests (2026-10-30). Each finding: a FAILING test beside a PASSING
 // comparison case of the nearest normal case. Same harness style as agent-undo.test.tsx.
 
 type On = Parameters<TestBody>[1]
@@ -248,7 +248,7 @@ test('review K3 comparison PASS: replace_all, undo 1.3 then 1.1', async ($, on) 
   expect(files.get(`${ROOT}/r.txt`)).toBe(RA_BEFORE)
 })
 
-// ---- Kind 6: on Windows (the owner's machine, E:\nightlab) paths are not shown from the project ----
+// ---- Kind 6: on Windows paths are not shown from the project ----
 test('review K6 FAIL: a Windows path is listed from the project root', async ($, on) => {
   const WROOT = 'C:\\proj'
   world(on, { [`${WROOT}\\app.ts`]: APP }, { root: WROOT })

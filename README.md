@@ -1,6 +1,7 @@
 # agent-undo
 
-Undo one of Claude Code's edits, hunk by hunk, and keep your own changes.
+Undo one of Claude Code's edits, hunk by hunk (a hunk is one block of changed lines inside an
+edit), and keep your own changes.
 
 When Claude Code edits files on its own (auto-accept, or a subagent doing the
 work), `/rewind` can only put all the code back to an earlier prompt, and

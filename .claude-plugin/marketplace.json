@@ -6,7 +6,7 @@
       "name": "agent-undo",
       "source": "./",
       "description": "Undo one of Claude's edits, hunk by hunk, keeping your own changes.",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "category": "productivity"
     }
   ],

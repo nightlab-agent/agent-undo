@@ -412,7 +412,8 @@ export const register: Register = on => {
     })
     await $.tool.register({
       name: 'undo',
-      description: "Lists the edits you (and your subagents) made to files in this session, numbered, each hunk as <edit>.<hunk>, " +
+      description: "Lists the edits you (and your subagents) made to files in this session, numbered, each hunk as <edit>.<hunk>; " +
+        'for a Bash command, each file it changed, deleted or created as <command>.<file>; ' +
         'or undoes one when the person asks: ref "" lists, "3" undoes all of edit 3, "3.2" one hunk. An undo puts back only ' +
         "lines that still read as your edit left them; the person's own later changes stay. List first, then undo the ref " +
         'that matches what the person asked for, and tell them the outcome line word for word.',

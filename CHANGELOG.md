@@ -6,10 +6,12 @@
   file (changed, deleted or new), and `/agent-undo 4.2` (or Claude's undo tool) puts one file back
   as it was just before the command; `/agent-undo 4` puts back all of them. A file comes back only
   if it still reads as the command left it; a new file is never deleted. Recorded only when the
-  command ran without a permission question, never two commands running at once, and not after a
-  command went on in the background (the list says so).
-- Writes `.git/agent-undo.index` (a private index) and git objects in each repo it records; the
-  README says how to remove them.
+  command ran without a permission question (seen with permissions bypassed; an allow rule is
+  tested), never two commands running at once, and not after any command went on in the
+  background (the list says so). After `git gc`, the next snapshot copies the index again.
+- Writes a private index (`agent-undo.index` in the git folder) and git objects in each repo it
+  records; the README says how to remove them.
+- Claude's undo tool describes Bash entries (<command>.<file>).
 - The list's last line names the newest entry's own number instead of an example "3.1".
 
 ## 0.1.1 (2026-10-30)

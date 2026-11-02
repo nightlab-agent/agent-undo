@@ -32,6 +32,8 @@ export type Repo = {
   person?: Script
   /** The person's own git holds .git/index.lock: a git command on the real index fails. */
   locked: boolean
+  /** git gc removed objects the private index still names: its next write-tree fails until it is seeded again. */
+  pruned: boolean
 }
 
 export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: boolean; top?: string } = {}): Repo => {
@@ -39,7 +41,7 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
   const IDX = `${top}/.git/agent-undo.index`
   const repo: Repo = {
     files: new Map(Object.entries(files0).map(([k, v]) => [`${ROOT}/${k}`, v])),
-    runs: [], git: opts.git ?? true, scripts: {}, adds: 0, verdict: 'allow', locked: false,
+    runs: [], git: opts.git ?? true, scripts: {}, adds: 0, verdict: 'allow', locked: false, pruned: false,
   }
   const trees = new Map<string, Map<string, string>>()
   const rel = (p: string) => p.slice(ROOT.length + 1)
@@ -67,12 +69,13 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
     if (!repo.git) return fail('fatal: not a git repository')
     if (s === 'git rev-parse --show-toplevel --show-prefix') return ok(`${top}\n\n`)
     if (s === 'git rev-parse --path-format=absolute --git-path index --git-path agent-undo.index') return ok(`${top}/.git/index\n${IDX}\n`)
-    if (a[0] === 'cp' && a[1] === `${top}/.git/index` && a[2] === IDX) { repo.files.set(`${ROOT}/.git/agent-undo.index`, 'seeded'); return ok() }
+    if (a[0] === 'cp' && a[1] === `${top}/.git/index` && a[2] === IDX) { repo.files.set(`${ROOT}/.git/agent-undo.index`, 'seeded'); repo.pruned = false; return ok() }
     if (s === 'git add -A' && own) {
       repo.adds++
       if (repo.onAdd) await repo.onAdd(repo.adds)
       return ok()
     }
+    if (s === 'git write-tree' && own && repo.pruned) return fail('error: invalid object 100644 e700 for \'b.txt\'\nfatal: git-write-tree: error building trees')
     if (s === 'git write-tree' && own) {
       const snap = new Map([...repo.files].filter(([k]) => !k.startsWith(`${ROOT}/.git/`)).map(([k, v]) => [rel(k), v]))
       const id = blob([...snap].map(([k, v]) => `${k}=${v}`).join('|'))
@@ -130,17 +133,21 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
     }
     throw new Error(`unexpected tool ${x.tool}`)
   })
-  on('tool.check', () => ({ decision: repo.verdict }) as never)
+  // The verdict holds for the decision `bash` raises; the host's own check inside $.tool.call
+  // afterwards reads as the person's answer to the question: allowed (an "ask" was approved).
+  on('tool.check', () => ({ decision: deciding ? repo.verdict : repo.verdict === 'deny' ? 'deny' : 'allow' }) as never)
   return repo
 }
 
 export const start = ($: $T) => $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
 let calls = 0
+let deciding = false
 export const bash = async ($: $T, repo: Repo, command: string, f: Script, more: Record<string, unknown> = {}) => {
   repo.scripts[command] = f
   const tool_use_id = `toolu_${++calls}`
+  deciding = true
   const v = (await ($ as any).tool.check({ tool: 'Bash', input: { command }, tool_use_id,
-    ...(more.agentId ? { agentId: more.agentId } : {}) })) as { decision: string }
+    ...(more.agentId ? { agentId: more.agentId } : {}) }).finally(() => { deciding = false })) as { decision: string }
   if (v.decision === 'deny') return { deny: 'denied' }
   if (v.decision === 'ask' && repo.person) await repo.person(repo.files)
   return $.tool.call({ tool: 'Bash', command, tool_use_id, ...more } as never)

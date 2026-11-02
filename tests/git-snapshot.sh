@@ -34,4 +34,11 @@ rm .git/index.lock
 [ "$(cat a.txt)" = a ] && [ "$(cat gone.txt)" = old ] && [ "$(cat b.txt)" = "$(printf 'b\ndirty')" ] \
   || { echo "FAIL restore"; exit 1; }
 [ -z "$(git diff --cached --name-only)" ] || { echo "FAIL the real index changed"; exit 1; }
-echo "PASS prefix, snapshot, diff, hash check, restore on the private index under the person's index.lock; the person's b.txt and the real index untouched"
+# git gc prunes objects only the private index names; its next write-tree fails until it is
+# seeded again from the real index (the record does that and tries once more).
+printf 'old\n' > keepme.txt; touch -d '2026-10-01' keepme.txt; sleep 1
+GIT_INDEX_FILE="$IDX" git add -A; GIT_INDEX_FILE="$IDX" git write-tree >/dev/null
+git prune --expire=now; printf 'a3\n' > a.txt
+if GIT_INDEX_FILE="$IDX" git add -A 2>/dev/null && GIT_INDEX_FILE="$IDX" git write-tree >/dev/null 2>&1; then echo "FAIL expected the pruned index to fail"; exit 1; fi
+cp "$REAL" "$IDX"; GIT_INDEX_FILE="$IDX" git add -A && GIT_INDEX_FILE="$IDX" git write-tree >/dev/null || { echo "FAIL reseed"; exit 1; }
+echo "PASS prefix, snapshot, diff, hash check, restore on the private index under the person's index.lock, reseed after git prune; the person's b.txt and the real index untouched"

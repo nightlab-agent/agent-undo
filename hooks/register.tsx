@@ -180,7 +180,7 @@ export const listing = (list: readonly Change[], shown: (file: string) => string
 // A private index (never the person's) takes `git add -A` and `write-tree`: no commit, no ref, and
 // the person's staged changes stay as they are. Files git ignores are not seen.
 
-type Repo = { top: string; index: string; env: Record<string, string> }
+type Repo = { top: string; index: string; real?: string; env: Record<string, string> }
 
 const git = async ($: EngineInterface, argv: string[], cwd: string, env?: Record<string, string>) => {
   const r = await $.process.run(['git', ...argv], { cwd, timeoutMs: 20000, ...(env ? { env } : {}) })
@@ -205,7 +205,7 @@ const repoOf = async ($: EngineInterface): Promise<Repo | undefined> => {
     if (!(await $.fs.exists(index)) && (await $.fs.exists(real))) {
       await $.process.run(['cp', real, index], { cwd: top }).catch(() => undefined)
     }
-    return { top, index, env: { GIT_INDEX_FILE: index } }
+    return { top, index, real, env: { GIT_INDEX_FILE: index } }
   } catch {
     return undefined
   }
@@ -219,8 +219,19 @@ const onIndex = <T,>(f: () => Promise<T>): Promise<T> => {
   return p
 }
 const snapshot = (repo: Repo, $: EngineInterface): Promise<string> => onIndex(async () => {
-  await git($, ['add', '-A'], repo.top, repo.env)
-  return (await git($, ['write-tree'], repo.top, repo.env)).trim()
+  const once = async () => {
+    await git($, ['add', '-A'], repo.top, repo.env)
+    return (await git($, ['write-tree'], repo.top, repo.env)).trim()
+  }
+  try {
+    return await once()
+  } catch {
+    // `git gc` removes objects only the private index names (it does not know the index), and
+    // write-tree then fails: seed it again from the real index, or empty it, and try once more.
+    const r = repo.real ? await $.process.run(['cp', repo.real, repo.index], { cwd: repo.top }).catch(() => undefined) : undefined
+    if (!r || r.exitCode !== 0) await git($, ['read-tree', '--empty'], repo.top, repo.env)
+    return await once()
+  }
 })
 
 /**
@@ -255,6 +266,7 @@ const editing = async <T,>(file: unknown, f: () => Promise<T>): Promise<T> => {
 type Shell = { repo: Repo; before: string; mine: Set<string>; overlapped: boolean }
 const shells = new Set<Shell>()
 const pending = new Map<string, Shell>()
+const asked = new Set<string>()
 /** Set when a command went on in the background: its later writes would land in any later record. */
 let stopped: string | undefined
 
@@ -280,7 +292,7 @@ const end = (sh: Shell) => {
 }
 const take = (id: unknown) => {
   const sh = typeof id === 'string' ? pending.get(id) : undefined
-  if (typeof id === 'string') pending.delete(id)
+  if (typeof id === 'string') { pending.delete(id); asked.delete(id) }
   return sh
 }
 
@@ -446,10 +458,13 @@ export const register: Register = on => {
   on('tool.check', { tool: 'Bash' }, async ($, e, next) => {
     const verdict = await next(e)
     try {
-      // One snapshot per call: a second decision for the same call keeps the first.
-      if (verdict.decision === 'allow' && typeof e.tool_use_id === 'string' && !pending.has(e.tool_use_id)) {
+      // The first decision for a call stands: a later "allow" for a call that was asked about (the
+      // question answered) or already snapshotted starts nothing.
+      const id = e.tool_use_id
+      if (typeof id === 'string' && verdict.decision !== 'allow') asked.add(id)
+      if (verdict.decision === 'allow' && typeof id === 'string' && !pending.has(id) && !asked.has(id)) {
         const sh = await begin($)
-        if (sh) pending.set(e.tool_use_id, sh)
+        if (sh) pending.set(id, sh)
       }
     } catch {
       // A failure of this mod never changes the verdict.
@@ -467,14 +482,15 @@ export const register: Register = on => {
       throw err
     }
     const sh = take(e.tool_use_id)
+    // Any command that goes on in the background, recorded or not (one approved at a prompt too),
+    // could write into a later command's window.
+    if (done.deny === undefined && (done.result as { backgroundTaskId?: unknown } | undefined)?.backgroundTaskId !== undefined && !stopped) {
+      stopped = `a command went on in the background at ${time(new Date().toISOString())}, and its later writes would land in any later record`
+      try { $.ui.status('agent-undo: shell commands no longer recorded (one runs in the background) · /agent-undo') } catch {}
+    }
     if (!sh) return done
     try {
-      if (done.deny !== undefined) return done
-      if ((done.result as { backgroundTaskId?: unknown } | undefined)?.backgroundTaskId !== undefined) {
-        stopped = `a command went on in the background at ${time(new Date().toISOString())}, and its later writes would land in any later record`
-        $.ui.status('agent-undo: shell commands no longer recorded (one runs in the background) · /agent-undo')
-        return done
-      }
+      if (done.deny !== undefined || stopped) return done
       const after = await snapshot(sh.repo, $)
       if (sh.overlapped) {
         $.ui.status('agent-undo: two shell commands ran at once; neither recorded · /agent-undo')

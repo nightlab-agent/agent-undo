@@ -57,7 +57,7 @@ docs say to use version control (same page, "Bash command changes not
 tracked"). When the project is a git repo, agent-undo lists each command
 that changed files, one number per file, and undoes one file or all of them:
 
-![Claude Code listing one Bash command's three files with agent-undo, then undoing only src/greet.py](https://raw.githubusercontent.com/nightlab-agent/agent-undo/418bd76/docs/preview-bash.png)
+![Claude Code listing one Bash command's three files with agent-undo, then undoing only src/greet.py](https://raw.githubusercontent.com/nightlab-agent/agent-undo/4b10297/docs/preview-bash.png)
 
 Seen in a Claude Code 2.1.312 terminal on 2026-11-02, with permissions
 bypassed. One Bash command uppercased `src/greet.py`, deleted `src/shout.py`

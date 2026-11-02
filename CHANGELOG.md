@@ -12,6 +12,10 @@
 - Writes a private index (`agent-undo.index` in the git folder) and git objects in each repo it
   records; the README says how to remove them.
 - Claude's undo tool describes Bash entries (<command>.<file>).
+- From the second code review: an approved command running beside a recorded one makes it not
+  recorded; a snapshot is taken only for a call this mod is wrapping, and dropped if the call
+  ended first; a session folder that is a symbolic link into a repo's subfolder is handled;
+  shell state starts fresh after `/clear`.
 - The list's last line names the newest entry's own number instead of an example "3.1".
 
 ## 0.1.1 (2026-10-30)

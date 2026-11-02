@@ -1,9 +1,10 @@
 // The engine beneath the Bash record, for tests: an in-memory repo at /proj, a strict fake git
 // that answers only the commands the record is meant to run (tests/git-snapshot.sh runs the same
 // ones on a real repo; any other command fails the test). `bash` decides each call first
-// (tool.check with the call's id, as the engine does before it runs the tool), lets the person
-// act when the verdict is "ask" (the question waiting), then runs it under the same id. The
-// host refuses `$.tool.check` from a test's own hooks, so the decision is raised from the test. From the code review of 2026-11-02 (F1-F5): a script may be
+// (tool.check with the call's id, as the engine does before it runs the tool), then runs it
+// under the same id; on "ask" the host raises the question (classic.PermissionRequest), where
+// the person acts, then says yes. The host refuses `$.tool.check` from a test's own hooks, so
+// the decision is raised from the test. From the code review of 2026-11-02 (F1-F5): a script may be
 // async (to overlap calls), a call may be backgrounded (the engine answers with backgroundTaskId
 // while the command keeps running), a hook may run inside a snapshot's `git add -A`, and `top`
 // lets the repo top git reports differ from the session root (a symlinked folder).
@@ -133,23 +134,24 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
     }
     throw new Error(`unexpected tool ${x.tool}`)
   })
-  // The verdict holds for the decision `bash` raises; the host's own check inside $.tool.call
-  // afterwards reads as the person's answer to the question: allowed (an "ask" was approved).
-  on('tool.check', () => ({ decision: deciding ? repo.verdict : repo.verdict === 'deny' ? 'deny' : 'allow' }) as never)
+  on('tool.check', () => ({ decision: repo.verdict }) as never)
+  // The question: the host raises it inside $.tool.call when the verdict is "ask". The person
+  // acts while it waits (repo.person), then says yes. (From the code review's loop 2.)
+  on('classic.PermissionRequest' as never, (async () => {
+    if (repo.person) await repo.person(repo.files)
+    return { decision: { behavior: 'allow' } }
+  }) as never)
   return repo
 }
 
 export const start = ($: $T) => $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
 let calls = 0
-let deciding = false
 export const bash = async ($: $T, repo: Repo, command: string, f: Script, more: Record<string, unknown> = {}) => {
   repo.scripts[command] = f
   const tool_use_id = `toolu_${++calls}`
-  deciding = true
   const v = (await ($ as any).tool.check({ tool: 'Bash', input: { command }, tool_use_id,
-    ...(more.agentId ? { agentId: more.agentId } : {}) }).finally(() => { deciding = false })) as { decision: string }
+    ...(more.agentId ? { agentId: more.agentId } : {}) })) as { decision: string }
   if (v.decision === 'deny') return { deny: 'denied' }
-  if (v.decision === 'ask' && repo.person) await repo.person(repo.files)
   return $.tool.call({ tool: 'Bash', command, tool_use_id, ...more } as never)
 }
 export const edit = ($: $T, file: string, a: string, b: string) =>

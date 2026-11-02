@@ -80,6 +80,9 @@ entry's own number. That line has not yet been seen on a screen.)
   you approve at a prompt is not recorded: a file you saved while the
   question waited would look like the command's. In auto mode, a command
   the classifier approves is probably not recorded (not tested).
+  If another mod turns Claude Code's "allow" into a question after this
+  one has looked, the command is recorded anyway, and a file you save while
+  that question waits would look like the command's.
 - Not recorded: two commands running at the same time (for example two
   subagents), files outside the git repo you started Claude Code in, and
   files git ignores. Files that Edit or Write changed while a command ran

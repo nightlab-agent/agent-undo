@@ -32,6 +32,9 @@ export type Change = {
   hunks: Hunk[]
   /** Bash only: the repo's top folder, the tree before the command, and the files it changed. */
   top?: string
+  /** Bash only: the session's folder as it spells it, and its place under the repo's top. */
+  root?: string
+  prefix?: string
   tree?: string
   files?: ShellFile[]
 }

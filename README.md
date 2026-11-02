@@ -4,6 +4,23 @@ Undo one of Claude Code's edits, hunk by hunk (a hunk is one block of changed li
 edit), and keep your own changes. In a git repo, also one file a shell command of Claude's changed,
 for commands Claude Code ran without asking you.
 
+Install at the Claude Code prompt (more under [Install](#install)):
+
+```
+/plugin marketplace add nightlab-agent/agent-undo
+/plugin install agent-undo@nightlab-agent-undo
+```
+
+![Claude Code listing three edits with agent-undo, one by a subagent, then undoing only edit 2.1](https://raw.githubusercontent.com/nightlab-agent/agent-undo/980737cae160614a1e670549111ce85fc47d63ac/docs/preview.png)
+
+Seen in a Claude Code 2.1.312 terminal (120 columns) on 2026-10-30. Claude
+made two edits, then a subagent made a third. Asked to "use the agent-undo
+tool, list your edits ... then undo only the comment above total()", Claude
+listed them and undid 2.1. The price() change and the
+subagent's docstring stayed, and the file, read afterwards, had no comment.
+The status line shows the newest edit.
+A Short of it, redrawn large: https://www.youtube.com/shorts/5DbSUqX227s
+
 When Claude Code edits files on its own (auto-accept, or a subagent doing the
 work), `/rewind` can only put all the code back to an earlier prompt, and
 Claude Code's docs say a subagent's edits are usually not captured there
@@ -15,15 +32,6 @@ together. A request for per-change review inside Claude Code:
 This mod (a plugin that changes what Claude Code does) records each Edit and
 Write that Claude and its subagents make in the session, from Claude Code's
 own diff of that edit, and numbers each hunk:
-
-![Claude Code listing three edits with agent-undo, one by a subagent, then undoing only edit 2.1](https://raw.githubusercontent.com/nightlab-agent/agent-undo/980737cae160614a1e670549111ce85fc47d63ac/docs/preview.png)
-
-Seen in a Claude Code 2.1.312 terminal (120 columns) on 2026-10-30. Claude
-made two edits, then a subagent made a third. Asked to "use the agent-undo
-tool, list your edits ... then undo only the comment above total()", Claude
-listed them and undid 2.1. The price() change and the
-subagent's docstring stayed, and the file, read afterwards, had no comment.
-The status line shows the newest edit.
 
 - `/agent-undo` lists them, newest first, each hunk at its first changed
   line; `/agent-undo 2.1` undoes one hunk;

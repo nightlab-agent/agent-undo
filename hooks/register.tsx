@@ -148,7 +148,7 @@ const counted = (h: Hunk) => {
 
 /** The list, newest change first, each hunk numbered `<change>.<hunk>`. */
 export const listing = (list: readonly Change[], shown: (file: string) => string, limit = 20): string => {
-  if (list.length === 0) return 'agent-undo: no edits by Claude in this session yet.'
+  if (list.length === 0) return `agent-undo: no edits by Claude in this session yet.${stopped ? `\nShell commands are no longer recorded in this session: ${stopped}.` : ''}`
   const out: string[] = []
   for (const c of [...list].reverse().slice(0, limit)) {
     const who = c.agent ? ` (subagent ${c.agent.slice(0, 8)})` : ''
@@ -170,6 +170,7 @@ export const listing = (list: readonly Change[], shown: (file: string) => string
     })
   }
   if (list.length > limit) out.push(`… ${list.length - limit} older`)
+  if (stopped) out.push(`Shell commands are no longer recorded in this session: ${stopped}.`)
   out.push('Undo one: /agent-undo 3.1   all of one edit: /agent-undo 3')
   return out.join('\n')
 }
@@ -186,11 +187,16 @@ const git = async ($: EngineInterface, argv: string[], cwd: string, env?: Record
   return r.stdout
 }
 
-/** The repo around the session's folder, with the private index seeded once from the real one. */
+/**
+ * The repo around the session's folder, its top spelled as the session spells it (git resolves
+ * symbolic links; Claude's file paths do not), with the private index seeded once from the real one.
+ */
 const repoOf = async ($: EngineInterface): Promise<Repo | undefined> => {
   try {
-    const root = await $.session.root()
-    const top = (await git($, ['rev-parse', '--show-toplevel'], root)).trim()
+    const root = slashed(await $.session.root())
+    const [gitTop, prefix = ''] = (await git($, ['rev-parse', '--show-toplevel', '--show-prefix'], root)).split('\n')
+    const sub = slashed(prefix.trim())
+    const top = sub === '' ? root : root.endsWith(`/${sub}`) ? root.slice(0, -sub.length - 1) : slashed(gitTop?.trim() ?? '')
     const [real, index] = (await git($, ['rev-parse', '--path-format=absolute', '--git-path', 'index', '--git-path', INDEX], top)).trim().split('\n')
     if (!top || !real || !index) return undefined
     // A copy of the real index keeps git's file timestamps, so the first snapshot hashes only
@@ -204,16 +210,17 @@ const repoOf = async ($: EngineInterface): Promise<Repo | undefined> => {
   }
 }
 
-// Snapshots share one index file, so they take turns; the commands themselves do not wait.
+// Snapshots and restores share one index file, so they take turns; the commands do not wait.
 let snaps: Promise<unknown> = Promise.resolve()
-const snapshot = (repo: Repo, $: EngineInterface): Promise<string> => {
-  const p = snaps.then(async () => {
-    await git($, ['add', '-A'], repo.top, repo.env)
-    return (await git($, ['write-tree'], repo.top, repo.env)).trim()
-  })
+const onIndex = <T,>(f: () => Promise<T>): Promise<T> => {
+  const p = snaps.then(f)
   snaps = p.catch(() => undefined)
   return p
 }
+const snapshot = (repo: Repo, $: EngineInterface): Promise<string> => onIndex(async () => {
+  await git($, ['add', '-A'], repo.top, repo.env)
+  return (await git($, ['write-tree'], repo.top, repo.env)).trim()
+})
 
 /**
  * The files an Edit or Write touched while each shell command ran: theirs, not the command's.
@@ -236,6 +243,44 @@ const editing = async <T,>(file: unknown, f: () => Promise<T>): Promise<T> => {
     if (left > 0) inFlight.set(k, left)
     else inFlight.delete(k)
   }
+}
+
+/**
+ * One shell command between its two snapshots. Taken when the engine allows the call with no
+ * question (tool.check), so nothing the person saves while a question waits is in it; a command
+ * that runs only after a question is not recorded. Its window stays open until the second
+ * snapshot is written. Two commands open at once are not recorded: each tree holds both.
+ */
+type Shell = { repo: Repo; before: string; mine: Set<string>; overlapped: boolean }
+const shells = new Set<Shell>()
+const pending = new Map<string, Shell>()
+/** Set when a command went on in the background: its later writes would land in any later record. */
+let stopped: string | undefined
+
+const begin = async ($: EngineInterface): Promise<Shell | undefined> => {
+  if (stopped) return undefined
+  const repo = await repoOf($)
+  if (!repo) return undefined
+  const sh: Shell = { repo, before: '', mine: new Set([...inFlight.keys()].filter(k => k !== '')), overlapped: shells.size > 0 }
+  for (const o of shells) o.overlapped = true
+  shells.add(sh)
+  windows.add(sh.mine)
+  try {
+    sh.before = await snapshot(repo, $)
+    return sh
+  } catch {
+    end(sh)
+    return undefined
+  }
+}
+const end = (sh: Shell) => {
+  shells.delete(sh)
+  windows.delete(sh.mine)
+}
+const take = (id: unknown) => {
+  const sh = typeof id === 'string' ? pending.get(id) : undefined
+  if (typeof id === 'string') pending.delete(id)
+  return sh
 }
 
 const commandLabel = (command: unknown) => {
@@ -283,7 +328,10 @@ async function undoShell($: EngineInterface, c: Change, h: number | undefined, a
         const now = there ? (await git($, ['hash-object', '--', f.path], c.top)).trim() : ''
         if (now !== f.after) { notes.push(`${ref} left as is: ${name} has changed since the command`); continue }
       }
-      await git($, ['restore', `--source=${c.tree}`, '--worktree', '--', `:(literal)${f.path}`], c.top)
+      // On the private index: the person's own git may hold the real one's lock.
+      const repo = await repoOf($)
+      if (!repo) throw new Error('the repo is no longer there')
+      await onIndex(() => git($, ['restore', `--source=${c.tree}`, '--worktree', '--', `:(literal)${f.path}`], c.top!, repo.env))
       f.undone = true
       undone.push(k)
     } catch (err) {
@@ -394,31 +442,55 @@ export const register: Register = on => {
     return done
   })
 
+  on('tool.check', { tool: 'Bash' }, async ($, e, next) => {
+    const verdict = await next(e)
+    try {
+      // One snapshot per call: a second decision for the same call keeps the first.
+      if (verdict.decision === 'allow' && typeof e.tool_use_id === 'string' && !pending.has(e.tool_use_id)) {
+        const sh = await begin($)
+        if (sh) pending.set(e.tool_use_id, sh)
+      }
+    } catch {
+      // A failure of this mod never changes the verdict.
+    }
+    return verdict
+  })
+
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
-    const repo = await repoOf($)
-    const before = repo && (await snapshot(repo, $).catch(() => undefined))
-    if (!repo || !before) return next(e)
-    const mine = new Set<string>([...inFlight.keys()].filter(k => k !== ''))
-    windows.add(mine)
     let done
     try {
       done = await next(e)
-    } finally {
-      windows.delete(mine)
+    } catch (err) {
+      const sh = take(e.tool_use_id)
+      if (sh) end(sh)
+      throw err
     }
+    const sh = take(e.tool_use_id)
+    if (!sh) return done
     try {
       if (done.deny !== undefined) return done
-      const after = await snapshot(repo, $)
-      if (after === before) return done
-      const all = filesOf(await git($, ['diff-tree', '-r', '-z', '--no-renames', before, after], repo.top))
-      const files = all.filter(f => !mine.has(fileKey(`${repo.top}/${f.path}`)))
+      if ((done.result as { backgroundTaskId?: unknown } | undefined)?.backgroundTaskId !== undefined) {
+        stopped = `a command went on in the background at ${time(new Date().toISOString())}, and its later writes would land in any later record`
+        $.ui.status('agent-undo: shell commands no longer recorded (one runs in the background) · /agent-undo')
+        return done
+      }
+      const after = await snapshot(sh.repo, $)
+      if (sh.overlapped) {
+        $.ui.status('agent-undo: two shell commands ran at once; neither recorded · /agent-undo')
+        return done
+      }
+      if (after === sh.before) return done
+      const all = filesOf(await git($, ['diff-tree', '-r', '-z', '--no-renames', sh.before, after], sh.repo.top))
+      const files = all.filter(f => !sh.mine.has(fileKey(`${sh.repo.top}/${f.path}`)))
       if (files.length === 0) return done
       await record($, {
         at: new Date().toISOString(), tool: 'Bash', file: commandLabel((e as { command?: unknown }).command),
-        agent: e.agentId, hunks: [], top: repo.top, tree: before, files,
+        agent: e.agentId, hunks: [], top: sh.repo.top, tree: sh.before, files,
       })
     } catch {
       // A failure of this mod never changes the command.
+    } finally {
+      end(sh)
     }
     return done
   })

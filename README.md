@@ -64,8 +64,8 @@ Seen in a Claude Code 2.1.312 terminal on 2026-11-02, with permissions
 bypassed. One Bash command uppercased `src/greet.py`, deleted `src/shout.py`
 and created `notes.txt`. Claude listed it and undid only 1.2: `greet.py` came
 back, and the other two stayed as the command left them. (The list's last
-line then suggested an example number, "3.1"; it now names the newest
-entry's own number. That line has not yet been seen on a screen.)
+line, which names the newest entry's own number, is folded out of view
+there: not yet seen on a screen.)
 
 - A changed or deleted file comes back as it was just before the command,
   your uncommitted changes included. It is put back only if it still reads

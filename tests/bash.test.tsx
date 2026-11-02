@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { filesOf } from '../hooks/register'
+import { filesOf, fileKey } from '../hooks/register'
 
 const Z = (rows: string[][]) => rows.map(([meta, path]) => `${meta}\0${path}\0`).join('')
 const A = 'a'.repeat(40), B = 'b'.repeat(40), O = '0'.repeat(40)
@@ -247,4 +247,11 @@ test('a second undo of the same file says it was done; an unknown file number ch
   await undo($, '1.1')
   expect(await undo($, '1.1')).toContain('1.1 was already undone')
   expect(await undo($, '1.9')).toContain('#1 has 3 file(s); no 1.9.')
+})
+
+test('look-alikes: one file spelled two ways is one key; two files are two', async () => {
+  expect(fileKey('c:\\proj\\b.txt')).toBe(fileKey('C:/proj/b.txt'))
+  expect(fileKey('/proj/b.txt')).toBe(fileKey('/proj//b.txt/'))
+  expect(fileKey('/proj/b.txt')).not.toBe(fileKey('/proj/B.txt'))
+  expect(fileKey('C:/proj/b.txt')).not.toBe(fileKey('C:/proj/b.txt.bak'))
 })

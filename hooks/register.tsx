@@ -121,6 +121,9 @@ const time = (iso: string) => {
 
 const slashed = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '')
 
+/** One file as one key however it is spelled: forward slashes, no doubled or final slash, drive letter upper case. */
+export const fileKey = (p: string) => slashed(p).replace(/\/{2,}/g, '/').replace(/^([a-z]):/, (_, d: string) => `${d.toUpperCase()}:`)
+
 // One undo at a time, and no Edit or Write runs while one does: an undo reads a file and writes
 // it back, and an edit landing in between would be lost.
 let queue: Promise<unknown> = Promise.resolve()
@@ -220,10 +223,10 @@ const windows = new Set<Set<string>>()
 const inFlight = new Map<string, number>()
 const touched = (file: unknown) => {
   if (typeof file !== 'string' || file === '') return
-  for (const w of windows) w.add(slashed(file))
+  for (const w of windows) w.add(fileKey(file))
 }
 const editing = async <T,>(file: unknown, f: () => Promise<T>): Promise<T> => {
-  const k = typeof file === 'string' ? slashed(file) : ''
+  const k = typeof file === 'string' && file !== '' ? fileKey(file) : ''
   touched(k)
   inFlight.set(k, (inFlight.get(k) ?? 0) + 1)
   try {
@@ -408,7 +411,7 @@ export const register: Register = on => {
       const after = await snapshot(repo, $)
       if (after === before) return done
       const all = filesOf(await git($, ['diff-tree', '-r', '-z', '--no-renames', before, after], repo.top))
-      const files = all.filter(f => !mine.has(slashed(`${repo.top}/${f.path}`)))
+      const files = all.filter(f => !mine.has(fileKey(`${repo.top}/${f.path}`)))
       if (files.length === 0) return done
       await record($, {
         at: new Date().toISOString(), tool: 'Bash', file: commandLabel((e as { command?: unknown }).command),

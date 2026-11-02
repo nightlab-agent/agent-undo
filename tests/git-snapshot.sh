@@ -9,7 +9,11 @@ git init -q; git config user.email t@example.invalid; git config user.name t
 printf 'a\n' > a.txt; printf 'b\n' > b.txt; printf 'old\n' > gone.txt; printf 'x\n' > .gitignore
 git add -A; git commit -qm init
 printf 'dirty\n' >> b.txt            # the person's own uncommitted change, before Claude's command
-IDX="$D/agent-undo.index"; rm -f "$IDX"
+top=$(git rev-parse --show-toplevel)
+paths=$(git rev-parse --path-format=absolute --git-path index --git-path agent-undo.index)
+REAL=$(echo "$paths" | sed -n 1p); IDX=$(echo "$paths" | sed -n 2p)
+[ "$REAL" = "$top/.git/index" ] && [ "$IDX" = "$top/.git/agent-undo.index" ] || { echo "FAIL paths: $paths"; exit 1; }
+rm -f "$IDX"; cp "$REAL" "$IDX"
 snap() { GIT_INDEX_FILE="$IDX" git add -A && GIT_INDEX_FILE="$IDX" git write-tree; }
 A=$(snap)
 # Claude's shell command: changes a.txt, deletes gone.txt, creates new.txt and an ignored file.

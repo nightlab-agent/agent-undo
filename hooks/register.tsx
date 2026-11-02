@@ -255,6 +255,47 @@ async function record($: EngineInterface, c: Omit<Change, 'n'>) {
   else if (last) $.ui.status(`#${last.n} ${last.file.split(/[\\/]/).pop()} (${last.hunks.length} hunk${last.hunks.length === 1 ? '' : 's'}) · /agent-undo`)
 }
 
+/**
+ * Puts back files a shell command changed or deleted, each from the tree before the command,
+ * only where the file still reads as the command left it (or, deleted, is still absent).
+ */
+async function undoShell($: EngineInterface, c: Change, h: number | undefined, arg: string, shown: (f: string) => string): Promise<string> {
+  const files = (c.files ?? []).map(f => ({ ...f }))
+  if (c.tooLarge || !c.top || !c.tree) return `agent-undo: #${c.n} changed too many files for a file-by-file record; nothing changed.`
+  const picked = h === undefined ? files.map((_, k) => k) : [h - 1]
+  if (picked.some(k => !files[k])) return `agent-undo: #${c.n} has ${files.length} file(s); no ${arg}.`
+  const undone: number[] = []
+  const notes: string[] = []
+  for (const k of picked) {
+    const f = files[k]!
+    const ref = `${c.n}.${k + 1}`
+    const name = shown(`${c.top}/${f.path}`)
+    if (f.undone) { notes.push(`${ref} was already undone`); continue }
+    if (f.fixed) { notes.push(`${ref} left as is: ${name} is ${f.fixed}`); continue }
+    if (f.status === 'A') { notes.push(`${ref} left as is: ${name} is a new file; nothing was there before. Delete it yourself if you want it gone.`); continue }
+    try {
+      const there = await $.fs.exists(`${c.top}/${f.path}`)
+      if (f.status === 'D' && there) { notes.push(`${ref} left as is: there is a file at ${name} again`); continue }
+      if (f.status !== 'D') {
+        const now = there ? (await git($, ['hash-object', '--', f.path], c.top)).trim() : ''
+        if (now !== f.after) { notes.push(`${ref} left as is: ${name} has changed since the command`); continue }
+      }
+      await git($, ['restore', `--source=${c.tree}`, '--worktree', '--', `:(literal)${f.path}`], c.top)
+      f.undone = true
+      undone.push(k)
+    } catch (err) {
+      notes.push(`${ref} left as is: git said ${String((err as Error).message ?? err).split('\n')[0]}`)
+    }
+  }
+  if (undone.length > 0) {
+    await update($, changes, all => all.map(x => (x.n !== c.n ? x : { ...x, files })))
+  }
+  const did = undone.length > 0
+    ? `undid ${undone.map(k => `${c.n}.${k + 1}`).join(', ')}: ${undone.map(k => shown(`${c.top}/${files[k]!.path}`)).join(', ')}`
+    : 'nothing changed'
+  return [`agent-undo: ${did}.`, ...notes].join('\n')
+}
+
 /** What `/agent-undo <args>` and the undo tool answer: the list, or the outcome of one undo. */
 async function run($: EngineInterface, args: string): Promise<string> {
   const root = slashed(await $.session.root())
@@ -265,6 +306,7 @@ async function run($: EngineInterface, args: string): Promise<string> {
   const ref = parseRef(arg)
   const c = ref && list.find(x => x.n === ref.n)
   if (!ref || !c) return `agent-undo: no edit "${arg}". Type /agent-undo to see the list.`
+  if (c.tool === 'Bash') return undoShell($, c, ref.h, arg, shown)
   if (c.created) return `agent-undo: #${c.n} created ${shown(c.file)}; nothing was there before. Delete it yourself if you want it gone.`
   if (c.tooLarge) return `agent-undo: #${c.n} was too large for a hunk-by-hunk record; nothing changed.`
   const picked = ref.h === undefined ? c.hunks.map((_, k) => k) : [ref.h - 1]

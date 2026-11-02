@@ -179,3 +179,72 @@ test('a file Claude edited with Edit while a shell command ran is left to the Ed
   expect(text).toContain('changed a.txt')
   expect(text).not.toMatch(/\d\.\d changed b\.txt/)
 })
+
+const tidy = (f: Map<string, string>) => {
+  f.set(`${ROOT}/a.txt`, 'a2\n'); f.delete(`${ROOT}/gone.txt`); f.set(`${ROOT}/new.txt`, 'n\n')
+}
+
+test('undoes one file of a shell command; the command\'s other files stay', async ($, on) => {
+  const repo = repoWorld(on, { 'a.txt': 'a\n', 'gone.txt': 'old\n' })
+  await start($)
+  await bash($, repo, 'sh tidy.sh', tidy)
+  expect(await undo($, '1.1')).toContain('undid 1.1: a.txt')
+  expect(repo.files.get(`${ROOT}/a.txt`)).toBe('a\n')
+  expect(repo.files.has(`${ROOT}/gone.txt`)).toBe(false)
+  expect(repo.files.get(`${ROOT}/new.txt`)).toBe('n\n')
+  expect(await undo($, '')).toContain('1.1 changed a.txt  (undone)')
+})
+
+test('brings back a file the command deleted', async ($, on) => {
+  const repo = repoWorld(on, { 'a.txt': 'a\n', 'gone.txt': 'old\n' })
+  await start($)
+  await bash($, repo, 'sh tidy.sh', tidy)
+  expect(await undo($, '1.2')).toContain('undid 1.2: gone.txt')
+  expect(repo.files.get(`${ROOT}/gone.txt`)).toBe('old\n')
+})
+
+test('all of one command: changed and deleted files come back, a new file is listed, never deleted', async ($, on) => {
+  const repo = repoWorld(on, { 'a.txt': 'a\n', 'gone.txt': 'old\n' })
+  await start($)
+  await bash($, repo, 'sh tidy.sh', tidy)
+  const text = await undo($, '1')
+  expect(text).toContain('undid 1.1, 1.2: a.txt, gone.txt')
+  expect(text).toContain('1.3 left as is: new.txt is a new file; nothing was there before. Delete it yourself if you want it gone.')
+  expect(repo.files.get(`${ROOT}/a.txt`)).toBe('a\n')
+  expect(repo.files.get(`${ROOT}/gone.txt`)).toBe('old\n')
+  expect(repo.files.get(`${ROOT}/new.txt`)).toBe('n\n')
+})
+
+test('refuses a file the person changed since the command, and leaves it alone', async ($, on) => {
+  const repo = repoWorld(on, { 'a.txt': 'a\n', 'gone.txt': 'old\n' })
+  await start($)
+  await bash($, repo, 'sh tidy.sh', tidy)
+  repo.files.set(`${ROOT}/a.txt`, 'mine\n')
+  repo.files.set(`${ROOT}/gone.txt`, 'mine too\n')
+  const text = await undo($, '1')
+  expect(text).toContain('1.1 left as is: a.txt has changed since the command')
+  expect(text).toContain('1.2 left as is: there is a file at gone.txt again')
+  expect(repo.files.get(`${ROOT}/a.txt`)).toBe('mine\n')
+  expect(repo.files.get(`${ROOT}/gone.txt`)).toBe('mine too\n')
+})
+
+test('out of order: an older command under a newer one is refused, then undone once the newer is', async ($, on) => {
+  const repo = repoWorld(on, { 'a.txt': 'a\n' })
+  await start($)
+  await bash($, repo, 'first', f => f.set(`${ROOT}/a.txt`, 'b\n'))
+  await bash($, repo, 'second', f => f.set(`${ROOT}/a.txt`, 'c\n'))
+  expect(await undo($, '1.1')).toContain('1.1 left as is: a.txt has changed since the command')
+  expect(repo.files.get(`${ROOT}/a.txt`)).toBe('c\n')
+  expect(await undo($, '2.1')).toContain('undid 2.1')
+  expect(await undo($, '1.1')).toContain('undid 1.1')
+  expect(repo.files.get(`${ROOT}/a.txt`)).toBe('a\n')
+})
+
+test('a second undo of the same file says it was done; an unknown file number changes nothing', async ($, on) => {
+  const repo = repoWorld(on, { 'a.txt': 'a\n', 'gone.txt': 'old\n' })
+  await start($)
+  await bash($, repo, 'sh tidy.sh', tidy)
+  await undo($, '1.1')
+  expect(await undo($, '1.1')).toContain('1.1 was already undone')
+  expect(await undo($, '1.9')).toContain('#1 has 3 file(s); no 1.9.')
+})

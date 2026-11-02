@@ -5,8 +5,8 @@
     {
       "name": "agent-undo",
       "source": "./",
-      "description": "Undo one of Claude's edits, hunk by hunk, keeping your own changes.",
-      "version": "0.1.1",
+      "description": "Undo one of Claude's edits hunk by hunk, or one file a shell command changed, keeping your own changes.",
+      "version": "0.2.0",
       "category": "productivity"
     }
   ],

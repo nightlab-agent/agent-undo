@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.0 (2026-11-02)
+
+- Shell commands: in a git repo, each Bash command that changed files is listed, one number per
+  file (changed, deleted or new), and `/agent-undo 4.2` (or Claude's undo tool) puts one file back
+  as it was just before the command; `/agent-undo 4` puts back all of them. A file comes back only
+  if it still reads as the command left it; a new file is never deleted. Recorded only when the
+  command ran without a permission question, never two commands running at once, and not after a
+  command went on in the background (the list says so).
+- Writes `.git/agent-undo.index` (a private index) and git objects in each repo it records; the
+  README says how to remove them.
+- The list's last line names the newest entry's own number instead of an example "3.1".
+
 ## 0.1.1 (2026-10-30)
 
 - README: says what a hunk is (one block of changed lines inside an edit).

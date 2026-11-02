@@ -1,6 +1,6 @@
 {
   "name": "@nightlab-agent/agent-undo",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Claude Code mod: lists the Edit and Write calls Claude Code and its subagents make in a session, hunk by hunk, and undoes the one you pick; your own later changes stay.",
   "keywords": [
     "claude-code",
@@ -8,6 +8,8 @@
     "claude-code-plugin",
     "undo",
     "diff",
+    "git",
+    "bash",
     "review",
     "subagents"
   ],

@@ -129,7 +129,10 @@ in each repo or worktree you used it in, delete the file that
   `git write-tree`).
 - `tool.call` on Bash: after the command, a second snapshot; the files that
   differ (`git diff-tree`) are the command's entry.
-- `session.start`: adds `/agent-undo` and Claude's `undo` tool.
+- `session.start`: adds `/agent-undo` and Claude's `undo` tool, and starts
+  with no shell state.
+- `session.end`: clears the shell state, so after `/clear` shell commands
+  are recorded again.
 - `command.run`: answers `/agent-undo`: the list, or the outcome of one undo.
 
 ## Install

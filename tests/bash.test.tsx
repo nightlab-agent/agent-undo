@@ -156,3 +156,12 @@ test('look-alikes: one file spelled two ways is one key; two files are two', asy
   expect(fileKey('/proj/b.txt')).not.toBe(fileKey('/proj/B.txt'))
   expect(fileKey('C:/proj/b.txt')).not.toBe(fileKey('C:/proj/b.txt.bak'))
 })
+
+test('the list\'s footer names a number from the list, not a made-up one', async ($, on) => {
+  const repo = repoWorld(on, { 'a.txt': 'a\n' })
+  await start($)
+  await bash($, repo, 'one', f => { f.set(`${ROOT}/a.txt`, 'b\n') })
+  const text = await undo($, '')
+  expect(text).toContain('Undo one: /agent-undo 1.1   all of #1: /agent-undo 1')
+  expect(text).not.toContain('3.1')
+})

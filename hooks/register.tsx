@@ -171,7 +171,8 @@ export const listing = (list: readonly Change[], shown: (file: string) => string
   }
   if (list.length > limit) out.push(`… ${list.length - limit} older`)
   if (stopped) out.push(`Shell commands are no longer recorded in this session: ${stopped}.`)
-  out.push('Undo one: /agent-undo 3.1   all of one edit: /agent-undo 3')
+  const newest = list[list.length - 1]!.n
+  out.push(`Undo one: /agent-undo ${newest}.1   all of #${newest}: /agent-undo ${newest}`)
   return out.join('\n')
 }
 

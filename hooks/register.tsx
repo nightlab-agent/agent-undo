@@ -1,15 +1,19 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Change, Hunk, ShellFile } from '../types'
+import type { Change, Hunk } from '../types'
+import { editing, record, serial, slashed, time } from './common'
+import { registerShell, resetShells, shellStopped, spelled, undoShell } from './shell'
 
-const MAX_CHANGES = 300
-const MAX_LINES = 4000
-const MAX_FILES = 200
-const INDEX = 'agent-undo.index'
-
-// Change the tag when a Change's fields change: it declines what an earlier version stored.
+// The session's list (the same plugin, key and shape in each file that reads or writes it: the
+// engine's scan lists a module's state per file). Change the tag in all three when a Change's
+// fields change: it declines what an earlier version stored.
 const changes = atom({ plugin: 'agent-undo', key: 'changes' } as const, [], { shape: 'changes-2' })
+
+export { fileKey } from './common'
+export { filesOf } from './shell'
+
+
 
 type Patch = { newStart: number; lines: string[] }[]
 
@@ -31,27 +35,6 @@ export const hunksOf = (patch: Patch): Hunk[] =>
     }
     return h
   })
-
-const ZERO = /^0+$/
-
-/** The files of `git diff-tree -r -z --no-renames <a> <b>`: each status, path and both blobs. */
-export const filesOf = (out: string): ShellFile[] => {
-  const parts = out.split('\0')
-  const files: ShellFile[] = []
-  for (let k = 0; k + 1 < parts.length; k += 2) {
-    const m = /^:(\d{6}) (\d{6}) ([0-9a-f]+) ([0-9a-f]+) ([MDAT])/.exec(parts[k]!)
-    if (!m) continue
-    const [, modeA, modeB, a, b, status] = m
-    const f: ShellFile = { path: parts[k + 1]!, status: status as ShellFile['status'] }
-    if (!ZERO.test(a!)) f.before = a
-    if (!ZERO.test(b!)) f.after = b
-    const modes = [modeA, modeB]
-    if (modes.includes('160000')) f.fixed = 'a submodule'
-    else if (modes.includes('120000')) f.fixed = 'a symbolic link'
-    files.push(f)
-  }
-  return files
-}
 
 type Row = { t: string; e: string }
 
@@ -114,25 +97,6 @@ export const parseRef = (arg: string): { n: number; h?: number } | undefined => 
   return { n: Number(m[1]), h: m[2] === undefined ? undefined : Number(m[2]) }
 }
 
-const time = (iso: string) => {
-  const d = new Date(iso)
-  return [d.getHours(), d.getMinutes(), d.getSeconds()].map(x => String(x).padStart(2, '0')).join(':')
-}
-
-const slashed = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '')
-
-/** One file as one key however it is spelled: forward slashes, no doubled or final slash, drive letter upper case. */
-export const fileKey = (p: string) => slashed(p).replace(/\/{2,}/g, '/').replace(/^([a-z]):/, (_, d: string) => `${d.toUpperCase()}:`)
-
-// One undo at a time, and no Edit or Write runs while one does: an undo reads a file and writes
-// it back, and an edit landing in between would be lost.
-let queue: Promise<unknown> = Promise.resolve()
-const serial = <T,>(f: () => Promise<T>): Promise<T> => {
-  const p = queue.then(f, f)
-  queue = p.catch(() => undefined)
-  return p
-}
-
 const counted = (h: Hunk) => {
   // Context lines are the common head and tail of before and after.
   let head = 0
@@ -148,7 +112,7 @@ const counted = (h: Hunk) => {
 
 /** The list, newest change first, each hunk numbered `<change>.<hunk>`. */
 export const listing = (list: readonly Change[], shown: (file: string) => string, limit = 20): string => {
-  if (list.length === 0) return `agent-undo: no edits by Claude in this session yet.${stopped ? `\nShell commands are no longer recorded in this session: ${stopped}.` : ''}`
+  if (list.length === 0) return `agent-undo: no edits by Claude in this session yet.${shellStopped() ? `\nShell commands are no longer recorded in this session: ${shellStopped()}.` : ''}`
   const out: string[] = []
   for (const c of [...list].reverse().slice(0, limit)) {
     const who = c.agent ? ` (subagent ${c.agent.slice(0, 8)})` : ''
@@ -170,206 +134,13 @@ export const listing = (list: readonly Change[], shown: (file: string) => string
     })
   }
   if (list.length > limit) out.push(`… ${list.length - limit} older`)
-  if (stopped) out.push(`Shell commands are no longer recorded in this session: ${stopped}.`)
+  if (shellStopped()) out.push(`Shell commands are no longer recorded in this session: ${shellStopped()}.`)
   const newest = list[list.length - 1]!.n
   out.push(`Undo one: /agent-undo ${newest}.1   all of #${newest}: /agent-undo ${newest}`)
   return out.join('\n')
 }
 
-// ---- Bash: what a shell command changed, from git's view of the work tree before and after it.
-// A private index (never the person's) takes `git add -A` and `write-tree`: no commit, no ref, and
-// the person's staged changes stay as they are. Files git ignores are not seen.
 
-/** `top`: git's own top (resolved), where git runs. `root` and `prefix`: the session's folder as the
- * session spells it and its place under the top, so a file reads as Claude's own paths do. */
-type Repo = { top: string; root: string; prefix: string; index: string; real?: string; env: Record<string, string> }
-
-/** A path from git (relative to its top) as the session spells it: under the session's folder
- * through its own spelling (a symbolic link to a subfolder included), elsewhere through git's top. */
-const spelled = (r: { top?: string; root?: string; prefix?: string }, p: string) =>
-  r.root !== undefined && r.prefix !== undefined && p.startsWith(r.prefix) ? `${r.root}/${p.slice(r.prefix.length)}` : `${r.top}/${p}`
-
-const git = async ($: EngineInterface, argv: string[], cwd: string, env?: Record<string, string>) => {
-  const r = await $.process.run(['git', ...argv], { cwd, timeoutMs: 20000, ...(env ? { env } : {}) })
-  if (r.exitCode !== 0) throw new Error(r.stderr.trim() || `git ${argv[0]} failed`)
-  return r.stdout
-}
-
-/**
- * The repo around the session's folder, its top spelled as the session spells it (git resolves
- * symbolic links; Claude's file paths do not), with the private index seeded once from the real one.
- */
-const repoOf = async ($: EngineInterface): Promise<Repo | undefined> => {
-  try {
-    const root = slashed(await $.session.root())
-    const [gitTop = '', prefix = ''] = (await git($, ['rev-parse', '--show-toplevel', '--show-prefix'], root)).split('\n')
-    const top = slashed(gitTop.trim())
-    const [real, index] = (await git($, ['rev-parse', '--path-format=absolute', '--git-path', 'index', '--git-path', INDEX], top)).trim().split('\n')
-    if (!top || !real || !index) return undefined
-    // A copy of the real index keeps git's file timestamps, so the first snapshot hashes only
-    // what changed. Without one (no cp, no commit yet) the first snapshot reads every file.
-    if (!(await $.fs.exists(index)) && (await $.fs.exists(real))) {
-      await $.process.run(['cp', real, index], { cwd: top }).catch(() => undefined)
-    }
-    return { top, root, prefix: prefix.trim(), index, real, env: { GIT_INDEX_FILE: index } }
-  } catch {
-    return undefined
-  }
-}
-
-// Snapshots and restores share one index file, so they take turns; the commands do not wait.
-let snaps: Promise<unknown> = Promise.resolve()
-const onIndex = <T,>(f: () => Promise<T>): Promise<T> => {
-  const p = snaps.then(f)
-  snaps = p.catch(() => undefined)
-  return p
-}
-const snapshot = (repo: Repo, $: EngineInterface): Promise<string> => onIndex(async () => {
-  const once = async () => {
-    await git($, ['add', '-A'], repo.top, repo.env)
-    return (await git($, ['write-tree'], repo.top, repo.env)).trim()
-  }
-  try {
-    return await once()
-  } catch {
-    // `git gc` removes objects only the private index names (it does not know the index), and
-    // write-tree then fails: seed it again from the real index, or empty it, and try once more.
-    const r = repo.real ? await $.process.run(['cp', repo.real, repo.index], { cwd: repo.top }).catch(() => undefined) : undefined
-    if (!r || r.exitCode !== 0) await git($, ['read-tree', '--empty'], repo.top, repo.env)
-    return await once()
-  }
-})
-
-/**
- * The files an Edit or Write touched while each shell command ran: theirs, not the command's.
- * Marked when the Edit or Write starts, and an open window takes the ones still running.
- */
-const windows = new Set<Set<string>>()
-const inFlight = new Map<string, number>()
-const touched = (file: unknown) => {
-  if (typeof file !== 'string' || file === '') return
-  for (const w of windows) w.add(fileKey(file))
-}
-const editing = async <T,>(file: unknown, f: () => Promise<T>): Promise<T> => {
-  const k = typeof file === 'string' && file !== '' ? fileKey(file) : ''
-  touched(k)
-  inFlight.set(k, (inFlight.get(k) ?? 0) + 1)
-  try {
-    return await f()
-  } finally {
-    const left = (inFlight.get(k) ?? 1) - 1
-    if (left > 0) inFlight.set(k, left)
-    else inFlight.delete(k)
-  }
-}
-
-/**
- * One shell command between its two snapshots. Taken when the engine allows the call with no
- * question (tool.check), so nothing the person saves while a question waits is in it; a command
- * that runs only after a question is not recorded. Its window stays open until the second
- * snapshot is written. Two commands open at once are not recorded: each tree holds both.
- */
-type Shell = { id: string; repo: Repo; before: string; mine: Set<string>; overlapped: boolean }
-const shells = new Set<Shell>()
-const pending = new Map<string, Shell>()
-const asked = new Set<string>()
-/** Every Bash call this hook is wrapping, recorded or not: a call running in a shell's window makes it overlapped. */
-const running = new Set<string>()
-/** Set when a command went on in the background: its later writes would land in any later record. */
-let stopped: string | undefined
-
-const begin = async ($: EngineInterface, id: string): Promise<Shell | undefined> => {
-  if (stopped) return undefined
-  const repo = await repoOf($)
-  if (!repo || !running.has(id)) return undefined
-  const others = shells.size > 0 || [...running].some(r => r !== id)
-  const sh: Shell = { id, repo, before: '', mine: new Set([...inFlight.keys()].filter(k => k !== '')), overlapped: others }
-  for (const o of shells) o.overlapped = true
-  shells.add(sh)
-  windows.add(sh.mine)
-  try {
-    sh.before = await snapshot(repo, $)
-    // Its call ended while the snapshot ran (interrupted): nothing will take this one.
-    if (!running.has(id)) { end(sh); return undefined }
-    return sh
-  } catch {
-    end(sh)
-    return undefined
-  }
-}
-const end = (sh: Shell) => {
-  shells.delete(sh)
-  windows.delete(sh.mine)
-}
-const take = (id: unknown) => {
-  const sh = typeof id === 'string' ? pending.get(id) : undefined
-  if (typeof id === 'string') { pending.delete(id); asked.delete(id) }
-  return sh
-}
-
-const commandLabel = (command: unknown) => {
-  const first = String(command ?? '').trim().split('\n')[0] ?? ''
-  return first.length > 60 ? `${first.slice(0, 59)}…` : first
-}
-
-/** Adds one change to the session's list, numbered after the highest so far. */
-async function record($: EngineInterface, c: Omit<Change, 'n'>) {
-  if (c.tool !== 'Bash') touched(c.file)
-  const lines = c.hunks.reduce((s, h) => s + h.before.length + h.after.length, 0)
-  const kept = lines > MAX_LINES || (c.files?.length ?? 0) > MAX_FILES ? { ...c, hunks: [], files: c.files && [], tooLarge: true } : c
-  await update($, changes, list => {
-    const n = list.reduce((m, x) => Math.max(m, x.n), 0) + 1
-    return [...list, { ...kept, n }].slice(-MAX_CHANGES)
-  })
-  const all = await read($, changes)
-  const last = all[all.length - 1]
-  if (last && last.tool === 'Bash') $.ui.status(`#${last.n} Bash (${last.files?.length ?? 0} file${last.files?.length === 1 ? '' : 's'}) · /agent-undo`)
-  else if (last) $.ui.status(`#${last.n} ${last.file.split(/[\\/]/).pop()} (${last.hunks.length} hunk${last.hunks.length === 1 ? '' : 's'}) · /agent-undo`)
-}
-
-/**
- * Puts back files a shell command changed or deleted, each from the tree before the command,
- * only where the file still reads as the command left it (or, deleted, is still absent).
- */
-async function undoShell($: EngineInterface, c: Change, h: number | undefined, arg: string, shown: (f: string) => string): Promise<string> {
-  const files = (c.files ?? []).map(f => ({ ...f }))
-  if (c.tooLarge || !c.top || !c.tree) return `agent-undo: #${c.n} changed too many files for a file-by-file record; nothing changed.`
-  const picked = h === undefined ? files.map((_, k) => k) : [h - 1]
-  if (picked.some(k => !files[k])) return `agent-undo: #${c.n} has ${files.length} file(s); no ${arg}.`
-  const undone: number[] = []
-  const notes: string[] = []
-  for (const k of picked) {
-    const f = files[k]!
-    const ref = `${c.n}.${k + 1}`
-    const name = shown(spelled(c, f.path))
-    if (f.undone) { notes.push(`${ref} was already undone`); continue }
-    if (f.fixed) { notes.push(`${ref} left as is: ${name} is ${f.fixed}`); continue }
-    if (f.status === 'A') { notes.push(`${ref} left as is: ${name} is a new file; nothing was there before. Delete it yourself if you want it gone.`); continue }
-    try {
-      const there = await $.fs.exists(`${c.top}/${f.path}`)
-      if (f.status === 'D' && there) { notes.push(`${ref} left as is: there is a file at ${name} again`); continue }
-      if (f.status !== 'D') {
-        const now = there ? (await git($, ['hash-object', '--', f.path], c.top)).trim() : ''
-        if (now !== f.after) { notes.push(`${ref} left as is: ${name} has changed since the command`); continue }
-      }
-      // On the private index: the person's own git may hold the real one's lock.
-      const repo = await repoOf($)
-      if (!repo) throw new Error('the repo is no longer there')
-      await onIndex(() => git($, ['restore', `--source=${c.tree}`, '--worktree', '--', `:(literal)${f.path}`], c.top!, repo.env))
-      f.undone = true
-      undone.push(k)
-    } catch (err) {
-      notes.push(`${ref} left as is: git said ${String((err as Error).message ?? err).split('\n')[0]}`)
-    }
-  }
-  if (undone.length > 0) {
-    await update($, changes, all => all.map(x => (x.n !== c.n ? x : { ...x, files })))
-  }
-  const did = undone.length > 0
-    ? `undid ${undone.map(k => `${c.n}.${k + 1}`).join(', ')}: ${undone.map(k => shown(spelled(c, files[k]!.path))).join(', ')}`
-    : 'nothing changed'
-  return [`agent-undo: ${did}.`, ...notes].join('\n')
-}
 
 /** What `/agent-undo <args>` and the undo tool answer: the list, or the outcome of one undo. */
 async function run($: EngineInterface, args: string): Promise<string> {
@@ -415,21 +186,7 @@ async function run($: EngineInterface, args: string): Promise<string> {
   return [`agent-undo: ${did}.`, ...notes].join('\n')
 }
 
-/** A new conversation (a start, or the process going on after /clear) starts with no shell state. */
-const resetShells = () => {
-  stopped = undefined
-  for (const sh of shells) end(sh)
-  pending.clear()
-  asked.clear()
-  running.clear()
-}
-
 export const register: Register = on => {
-  on('session.end', async ($, e, next) => {
-    resetShells()
-    return next(e)
-  })
-
   on('session.start', async ($, e, next) => {
     resetShells()
     await $.command.register({
@@ -482,71 +239,7 @@ export const register: Register = on => {
     return done
   })
 
-  on('tool.check', { tool: 'Bash' }, async ($, e, next) => {
-    const verdict = await next(e)
-    try {
-      // The first decision for a call stands: a later "allow" for a call that was asked about (the
-      // question answered) or already snapshotted starts nothing.
-      const id = e.tool_use_id
-      if (typeof id === 'string' && verdict.decision !== 'allow') asked.add(id)
-      if (verdict.decision === 'allow' && typeof id === 'string' && !pending.has(id) && !asked.has(id)) {
-        const sh = await begin($, id)
-        if (sh) pending.set(id, sh)
-      }
-    } catch {
-      // A failure of this mod never changes the verdict.
-    }
-    return verdict
-  })
-
-  on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
-    const id = typeof e.tool_use_id === 'string' ? e.tool_use_id : undefined
-    // Only a call this hook wraps gets a snapshot (its check runs inside next(e)); while it runs,
-    // every other shell's window is overlapped.
-    if (id) {
-      running.add(id)
-      for (const o of shells) if (o.id !== id) o.overlapped = true
-    }
-    let done
-    try {
-      done = await next(e)
-    } catch (err) {
-      if (id) running.delete(id)
-      const sh = take(id)
-      if (sh) end(sh)
-      throw err
-    }
-    if (id) running.delete(id)
-    const sh = take(id)
-    // Any command that goes on in the background, recorded or not (one approved at a prompt too),
-    // could write into a later command's window.
-    if (done.deny === undefined && (done.result as { backgroundTaskId?: unknown } | undefined)?.backgroundTaskId !== undefined && !stopped) {
-      stopped = `a command went on in the background at ${time(new Date().toISOString())}, and its later writes would land in any later record`
-      try { $.ui.status('agent-undo: shell commands no longer recorded (one runs in the background) · /agent-undo') } catch {}
-    }
-    if (!sh) return done
-    try {
-      if (done.deny !== undefined || stopped) return done
-      const after = await snapshot(sh.repo, $)
-      if (sh.overlapped) {
-        $.ui.status('agent-undo: two shell commands ran at once; neither recorded · /agent-undo')
-        return done
-      }
-      if (after === sh.before) return done
-      const all = filesOf(await git($, ['diff-tree', '-r', '-z', '--no-renames', sh.before, after], sh.repo.top))
-      const files = all.filter(f => !sh.mine.has(fileKey(spelled(sh.repo, f.path))))
-      if (files.length === 0) return done
-      await record($, {
-        at: new Date().toISOString(), tool: 'Bash', file: commandLabel((e as { command?: unknown }).command),
-        agent: e.agentId, hunks: [], top: sh.repo.top, root: sh.repo.root, prefix: sh.repo.prefix, tree: sh.before, files,
-      })
-    } catch {
-      // A failure of this mod never changes the command.
-    } finally {
-      end(sh)
-    }
-    return done
-  })
+  registerShell(on)
 
   on('command.run', { command: 'agent-undo' }, async ($, e) => ({ text: await serial(() => run($, e.args)) }))
 

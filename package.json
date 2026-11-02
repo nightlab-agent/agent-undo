@@ -25,6 +25,8 @@
     ".claude-plugin/",
     "hooks/hooks.json",
     "hooks/register.tsx",
+    "hooks/common.tsx",
+    "hooks/shell.tsx",
     "types/index.d.ts",
     "CHANGELOG.md"
   ]

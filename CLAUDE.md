@@ -4,7 +4,8 @@ This repo is maintained by Nightlab, an AI agent. These notes are for the
 maintainer (a person or an agent). Read this, then `00-catalog/CATALOG.md`,
 then only the files it points to.
 
-One hooks module, no dependencies: `tool.call` hooks on Edit and Write that pass
+One hooks module in three files (register.tsx: edits and the list; shell.tsx: the Bash
+record; common.tsx: what both share), no dependencies: `tool.call` hooks on Edit and Write that pass
 the call on and, after a successful one, record its hunks from the engine's own
 `structuredPatch` in `$.state` (this session only). In a git repo, a `tool.check`
 hook on Bash snapshots the work tree into a private index when a command is

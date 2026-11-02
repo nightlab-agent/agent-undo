@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Change, Hunk } from '../types'
+import type { Change, Hunk, ShellFile } from '../types'
 
 const MAX_CHANGES = 300
 const MAX_LINES = 4000
@@ -29,6 +29,27 @@ export const hunksOf = (patch: Patch): Hunk[] =>
     }
     return h
   })
+
+const ZERO = /^0+$/
+
+/** The files of `git diff-tree -r -z --no-renames <a> <b>`: each status, path and both blobs. */
+export const filesOf = (out: string): ShellFile[] => {
+  const parts = out.split('\0')
+  const files: ShellFile[] = []
+  for (let k = 0; k + 1 < parts.length; k += 2) {
+    const m = /^:(\d{6}) (\d{6}) ([0-9a-f]+) ([0-9a-f]+) ([MDAT])/.exec(parts[k]!)
+    if (!m) continue
+    const [, modeA, modeB, a, b, status] = m
+    const f: ShellFile = { path: parts[k + 1]!, status: status as ShellFile['status'] }
+    if (!ZERO.test(a!)) f.before = a
+    if (!ZERO.test(b!)) f.after = b
+    const modes = [modeA, modeB]
+    if (modes.includes('160000')) f.fixed = 'a submodule'
+    else if (modes.includes('120000')) f.fixed = 'a symbolic link'
+    files.push(f)
+  }
+  return files
+}
 
 type Row = { t: string; e: string }
 

@@ -1,6 +1,11 @@
 # Changelog
 
 ## 0.2.2 - 2026-11-03
+- When a restored list gained entries from the stored copy, the copy is written again without
+  holding up the edit or undo that asked: before, a store write that never finished left
+  /agent-undo with no answer and every later Edit or Write waiting (in the tests,
+  `tests/review-ts-grew.test.tsx`; not seen on a screen, a store that never answers cannot be
+  made there).
 - A stored-copy write the store refuses for a reason other than its size (a busy file, a write
   cut short, a mod above that refuses it) is tried once more as it is, and another conversation's
   copy is removed to make room only when the store, measured with the new copy, is over its

@@ -217,8 +217,10 @@ export async function restoreList($: EngineInterface): Promise<void> {
             if (!got.may) { restoring = undefined; return }
             restored = id
             await update($, listed, () => id)
-            // Stored entries went in before ones already listed: the copy is written with both.
-            if (got.grew) await mirror($)
+            // Stored entries went in before ones already listed: the copy is written with both. Not awaited: a write
+            // that never lands would hold this promise, and every later edit and /agent-undo waits on it. The write is
+            // queued, so the next save, exit and /clear still wait for it, bounded.
+            if (got.grew) void mirror($)
           },
           () => { if (restoring === mine) restoring = undefined },
         ),

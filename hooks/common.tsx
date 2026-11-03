@@ -47,11 +47,14 @@ function after($: EngineInterface, prev: Promise<unknown>): Promise<unknown> {
     }
   })
 }
-const enqueue = (p: Promise<unknown>) => { saving = p; void p.then(() => settled.add(p)); return p }
+let queued = 0
+const order = new WeakMap<Promise<unknown>, number>()
+const enqueue = (p: Promise<unknown>) => { saving = p; order.set(p, ++queued); void p.then(() => settled.add(p)); return p }
 // The queue, then every write it passed by: read once the queue settles, since a save still in its wait adds
 // the write it passes when its second is up. Never waited for until `passed` is empty: a later save may pass
 // the waiting write itself.
-const whole = () => saving.then(() => Promise.all([...passed]))
+// Only writes queued before this one: a later save may have passed this very chain, and it must not wait for itself.
+const whole = () => { const before = queued; return saving.then(() => Promise.all([...passed].filter(p => (order.get(p) ?? 0) <= before))) }
 
 /** Writes the session's list to the store as it stands now; a failure only leaves no copy. */
 export function mirror($: EngineInterface): Promise<void> {

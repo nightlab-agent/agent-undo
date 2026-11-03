@@ -41,6 +41,8 @@
   `tests/review-undo17.test.tsx` X1 and `tests/review-undo18.test.tsx` Y1 show the two waits;
   `tests/review-undo16.test.tsx` N1 the later edits). A bound there would let that write land last,
   over the newer copy.
+- A conversation's copy that a later save passed by no longer waits for itself, so the next /clear's
+  copy is written (`tests/review-undo19.test.tsx`, Z1).
 - A Bash command or MCP call that changed files and is still being recorded when a /clear or an
   exit comes is waited for too, under the same second (`tests/review-undo15ts.test.tsx`, B1).
 - A /clear and a /resume back (or a /resume to another conversation) while the stored list was

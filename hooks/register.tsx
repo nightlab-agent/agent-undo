@@ -2,7 +2,7 @@ import { atom, read } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Change, Hunk } from '../types'
-import { editing, forgetRestore, record, restoreList, serial, slashed, time, updateList } from './common'
+import { editing, forgetRestore, record, restoreList, serial, slashed, snapped, time, updateList } from './common'
 import { registerShell, resetShells, shellStopped, spelled, undoShell } from './shell'
 
 // The session's list (the same plugin, key and shape in each file that reads or writes it: the
@@ -117,9 +117,9 @@ export const listing = (list: readonly Change[], shown: (file: string) => string
   for (const c of [...list].reverse().slice(0, limit)) {
     const who = c.agent ? ` (subagent ${c.agent.slice(0, 8)})` : ''
     const note = c.created ? ' (new file)' : c.tooLarge ? ' (too large to undo here)' : ''
-    if (c.tool === 'Bash') {
+    if (snapped(c)) {
       const fs = c.files ?? []
-      out.push(`#${c.n} ${time(c.at)} Bash ${c.file} (${c.tooLarge ? 'over 200' : fs.length} file${fs.length === 1 ? '' : 's'})${who}${note}`)
+      out.push(`#${c.n} ${time(c.at)} ${c.tool} ${c.file} (${c.tooLarge ? 'over 200' : fs.length} file${fs.length === 1 ? '' : 's'})${who}${note}`)
       fs.forEach((f, k) => {
         const what = f.status === 'A' ? 'new file' : f.status === 'D' ? 'deleted' : 'changed'
         const why = f.fixed ? ` (${f.fixed}: not undone here)` : ''
@@ -153,7 +153,7 @@ async function run($: EngineInterface, args: string): Promise<string> {
   const ref = parseRef(arg)
   const c = ref && list.find(x => x.n === ref.n)
   if (!ref || !c) return `agent-undo: no edit "${arg}". Type /agent-undo to see the list.`
-  if (c.tool === 'Bash') return undoShell($, c, ref.h, arg, shown)
+  if (snapped(c)) return undoShell($, c, ref.h, arg, shown)
   if (c.created) return `agent-undo: #${c.n} created ${shown(c.file)}; nothing was there before. Delete it yourself if you want it gone.`
   if (c.tooLarge) return `agent-undo: #${c.n} was too large for a hunk-by-hunk record; nothing changed.`
   const picked = ref.h === undefined ? c.hunks.map((_, k) => k) : [ref.h - 1]

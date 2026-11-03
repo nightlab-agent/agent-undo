@@ -20,19 +20,20 @@ export type ShellFile = {
   undone?: boolean
 }
 
-/** One Edit, Write or Bash call that Claude Code (or one of its subagents) made, numbered in this session. */
+/** One Edit, Write, Bash or MCP tool call that Claude Code (or one of its subagents) made, numbered in this session.
+ * An MCP call is recorded as a Bash command is (files, tree); its `file` is the server and tool, readably. */
 export type Change = {
   n: number
   at: string
-  tool: 'Edit' | 'Write' | 'Bash'
+  tool: 'Edit' | 'Write' | 'Bash' | 'MCP'
   file: string
   agent?: string
   created?: boolean
   tooLarge?: boolean
   hunks: Hunk[]
-  /** Bash only: the repo's top folder, the tree before the command, and the files it changed. */
+  /** Bash and MCP only: the repo's top folder, the tree before the command, and the files it changed. */
   top?: string
-  /** Bash only: the session's folder as it spells it, and its place under the repo's top. */
+  /** Bash and MCP only: the session's folder as it spells it, and its place under the repo's top. */
   root?: string
   prefix?: string
   tree?: string

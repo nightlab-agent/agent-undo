@@ -195,9 +195,12 @@ export const editing = async <T,>(file: unknown, f: () => Promise<T>): Promise<T
   }
 }
 
+/** A change recorded from git snapshots around the call (a Bash command, an MCP tool call): files, not hunks. */
+export const snapped = (c: { tool: string }) => c.tool === 'Bash' || c.tool === 'MCP'
+
 /** Adds one change to the session's list, numbered after the highest so far. */
 export async function record($: EngineInterface, c: Omit<Change, 'n'>) {
-  if (c.tool !== 'Bash') touched(c.file)
+  if (!snapped(c)) touched(c.file)
   const lines = c.hunks.reduce((s, h) => s + h.before.length + h.after.length, 0)
   const kept = lines > MAX_LINES || (c.files?.length ?? 0) > MAX_FILES ? { ...c, hunks: [], files: c.files && [], tooLarge: true } : c
   await updateList($, list => {
@@ -206,6 +209,6 @@ export async function record($: EngineInterface, c: Omit<Change, 'n'>) {
   })
   const all = await read($, changes)
   const last = all[all.length - 1]
-  if (last && last.tool === 'Bash') $.ui.status(`#${last.n} Bash (${last.files?.length ?? 0} file${last.files?.length === 1 ? '' : 's'}) · /agent-undo`)
+  if (last && snapped(last)) $.ui.status(`#${last.n} ${last.tool === 'MCP' ? `MCP ${last.file}` : 'Bash'} (${last.files?.length ?? 0} file${last.files?.length === 1 ? '' : 's'}) · /agent-undo`)
   else if (last) $.ui.status(`#${last.n} ${last.file.split(/[\\/]/).pop()} (${last.hunks.length} hunk${last.hunks.length === 1 ? '' : 's'}) · /agent-undo`)
 }

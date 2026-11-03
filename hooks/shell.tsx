@@ -165,7 +165,7 @@ export async function undoShell($: EngineInterface, c: Change, h: number | undef
       if (f.status === 'D' && there) { notes.push(`${ref} left as is: there is a file at ${name} again`); continue }
       if (f.status !== 'D') {
         const now = there ? (await git($, ['hash-object', '--', f.path], c.top)).trim() : ''
-        if (now !== f.after) { notes.push(`${ref} left as is: ${name} has changed since the command`); continue }
+        if (now !== f.after) { notes.push(`${ref} left as is: ${name} has changed since the ${c.tool === 'MCP' ? 'call' : 'command'}`); continue }
       }
       // On the private index: the person's own git may hold the real one's lock.
       const repo = await repoOf($)
@@ -206,7 +206,7 @@ async function checked<V extends Verdict>($: EngineInterface, id: unknown, verdi
 }
 
 /** One wrapped call: run it, then snapshot again and record the files that differ, as `tool` named `label`. */
-async function around<D extends Done>($: EngineInterface, rawId: unknown, agent: string | undefined, tool: 'Bash',
+async function around<D extends Done>($: EngineInterface, rawId: unknown, agent: string | undefined, tool: 'Bash' | 'MCP',
   label: string, call: () => Promise<D>): Promise<D> {
   const id = typeof rawId === 'string' ? rawId : undefined
   // Only a call this hook wraps gets a snapshot (its check runs inside the call); while it runs,
@@ -237,7 +237,7 @@ async function around<D extends Done>($: EngineInterface, rawId: unknown, agent:
     if (done.deny !== undefined || stopped) return done
     const after = await snapshot(sh.repo, $)
     if (sh.overlapped) {
-      $.ui.status('agent-undo: two shell commands ran at once; neither recorded · /agent-undo')
+      $.ui.status(`agent-undo: two ${tool === 'MCP' ? 'tool calls' : 'shell commands'} ran at once; neither recorded · /agent-undo`)
       return done
     }
     if (after === sh.before) return done

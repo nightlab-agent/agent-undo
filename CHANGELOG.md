@@ -10,6 +10,8 @@
   Claude Code's docs imply a plain `claude --resume` reuses the session id (`--fork-session`
   makes "a new session ID instead of reusing the original", code.claude.com/docs/en/cli-reference); the list coming back
   after a resume is not yet seen on a screen. A new session, in a preview, starts empty.
+- When the store is full and an older session's copy must go, a write time that could not be read
+  is tried once more, and a copy whose time still cannot be read is kept, not evicted (in the tests).
 - The stored copy: a read refused once is tried again, and no copy is written until the stored
   one was read and taken as the list, so a shorter list never replaces it. If the store refused
   both reads and edits were listed meanwhile, the stored copy is kept as it was and those later

@@ -6,7 +6,8 @@
   without a question is recorded the way a Bash command is, listed as `MCP <server> <tool>` with
   its files, and undone with the same shell undo (a file changed since is refused, a new file is
   never deleted, the private index only). A call that ran while a Bash command or another MCP
-  call ran records neither; a denied call, or one that answered an error, records nothing (in
+  call ran records neither, except that an MCP call the engine reports read-only, ended before
+  the other, costs the other nothing; a denied call, or one that answered an error, records nothing (in
   the tests; not yet seen on a screen).
 - The type check passes whether or not the engine's tool result declarations are present.
 

@@ -35,8 +35,9 @@ export type Repo = {
   locked: boolean
   /** git gc removed objects the private index still names: its next write-tree fails until it is seeded again. */
   pruned: boolean
-  /** Any other tool (an MCP tool, or an unknown one), by name: what it does to the files; 'error' answers an error. */
-  tools: Record<string, (f: Map<string, string>) => void | 'error' | Promise<void | 'error'>>
+  /** Any other tool (an MCP tool, or an unknown one), by name: what it does to the files; 'error' answers an
+   * error, 'read-only' answers as core does a call the tool held read-only (`isReadOnly`). */
+  tools: Record<string, (f: Map<string, string>) => void | 'error' | 'read-only' | Promise<void | 'error' | 'read-only'>>
 }
 
 export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: boolean; top?: string } = {}): Repo => {
@@ -137,8 +138,9 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
     const tool = repo.tools[x.tool]
     if (tool) {
       // As core answers an MCP tool: its content blocks, or an error the model reads.
-      if ((await tool(repo.files)) === 'error') return { isError: true, result: 'Error: boom', text: 'Error: boom' } as never
-      return { result: [{ type: 'text', text: 'ok' }], text: 'ok' } as never
+      const said = await tool(repo.files)
+      if (said === 'error') return { isError: true, result: 'Error: boom', text: 'Error: boom' } as never
+      return { result: [{ type: 'text', text: 'ok' }], text: 'ok', ...(said === 'read-only' ? { isReadOnly: true } : {}) } as never
     }
     throw new Error(`unexpected tool ${x.tool}`)
   })

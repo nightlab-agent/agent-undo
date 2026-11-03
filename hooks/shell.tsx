@@ -100,12 +100,25 @@ function snapshot(repo: Repo, $: EngineInterface): Promise<string> {
  * that runs only after a question is not recorded. Its window stays open until the second
  * snapshot is written. Two commands open at once are not recorded: each tree holds both.
  */
-type Shell = { id: string; repo: Repo; before: string; mine: Set<string>; overlapped: boolean }
+type Shell = { id: string; repo: Repo; before: string; mine: Set<string>; overlapped: boolean; maybe: Set<string> }
 const shells = new Set<Shell>()
 const pending = new Map<string, Shell>()
 const asked = new Set<string>()
-/** Every Bash call this hook is wrapping, recorded or not: a call running in a shell's window makes it overlapped. */
-const running = new Set<string>()
+/** Every call this hook is wrapping, recorded or not, and its kind: a call running in a shell's window
+ * makes it overlapped (a Bash command at once; an MCP call when it ends, unless it ended read-only). */
+const running = new Map<string, 'Bash' | 'MCP'>()
+/** Call `id` ran in `sh`'s window: a Bash command overlaps it now; an MCP call waits in `maybe` until it ends. */
+const overlap = (sh: Shell, id: string) => {
+  if (id === sh.id) return
+  if (running.get(id) === 'MCP') sh.maybe.add(id)
+  else sh.overlapped = true
+}
+/** An MCP call ended: read-only (the engine's `isReadOnly`), it overlapped nothing; otherwise every window it ran in is overlapped. */
+const settle = (id: string, readOnly: boolean) => {
+  for (const o of shells) {
+    if (o.maybe.delete(id) && !readOnly) o.overlapped = true
+  }
+}
 /** Set when a command went on in the background: its later writes would land in any later record. */
 let stopped: string | undefined
 
@@ -113,9 +126,10 @@ async function begin($: EngineInterface, id: string): Promise<Shell | undefined>
   if (stopped) return undefined
   const repo = await repoOf($)
   if (!repo || !running.has(id)) return undefined
-  const others = shells.size > 0 || [...running].some(r => r !== id)
-  const sh: Shell = { id, repo, before: '', mine: new Set([...inFlight.keys()].filter(k => k !== '')), overlapped: others }
-  for (const o of shells) o.overlapped = true
+  const sh: Shell = { id, repo, before: '', mine: new Set([...inFlight.keys()].filter(k => k !== '')), overlapped: false, maybe: new Set() }
+  // A window still open after its call ended (its second snapshot running) counts too.
+  for (const o of shells) { overlap(sh, o.id); overlap(o, id) }
+  for (const r of running.keys()) overlap(sh, r)
   shells.add(sh)
   windows.add(sh.mine)
   try {
@@ -222,21 +236,21 @@ async function around<D extends Done>($: EngineInterface, rawId: unknown, agent:
   label: string, call: () => Promise<D>): Promise<D> {
   const id = typeof rawId === 'string' ? rawId : undefined
   // Only a call this hook wraps gets a snapshot (its check runs inside the call); while it runs,
-  // every other open window is overlapped.
+  // every other open window is overlapped (by an MCP call only if it does not end read-only).
   if (id) {
-    running.add(id)
-    for (const o of shells) if (o.id !== id) o.overlapped = true
+    running.set(id, tool)
+    for (const o of shells) overlap(o, id)
   }
   let done: D
   try {
     done = await call()
   } catch (err) {
-    if (id) running.delete(id)
+    if (id) { running.delete(id); settle(id, false) }
     const sh = take(id)
     if (sh) end(sh)
     throw err
   }
-  if (id) running.delete(id)
+  if (id) { running.delete(id); settle(id, (done as { isReadOnly?: unknown }).isReadOnly === true) }
   const sh = take(id)
   // Any command that goes on in the background, recorded or not (one approved at a prompt too),
   // could write into a later command's window.
@@ -249,7 +263,8 @@ async function around<D extends Done>($: EngineInterface, rawId: unknown, agent:
     // A failed command may still have changed files and is recorded; an MCP tool that answered an error is not.
     if (done.deny !== undefined || stopped || (tool === 'MCP' && done.isError)) return done
     const after = await snapshot(sh.repo, $)
-    if (sh.overlapped) {
+    // An MCP call not yet ended in this window may still write into it.
+    if (sh.overlapped || sh.maybe.size > 0) {
       $.ui.status(`agent-undo: two ${tool === 'MCP' ? 'tool calls' : 'shell commands'} ran at once; neither recorded · /agent-undo`)
       return done
     }
@@ -294,7 +309,8 @@ export const registerShell = (on: Parameters<Register>[0]) => {
     around($, e.tool_use_id, e.agentId, 'Bash', commandLabel((e as { command?: unknown }).command), () => next(e)))
 
   // MCP tools write files Claude Code's checkpoints do not track: each call is recorded as a Bash
-  // command is, sharing its windows (a call beside a command or another call is not recorded).
+  // command is, sharing its windows (a call beside a command or another call is not recorded, unless the other is an MCP call that ended
+  // read-only, the engine's isReadOnly).
   // Every other tool passes straight on, untouched.
   on('tool.check', async ($, e, next) => (isMcp(e.tool) ? checked($, e.tool_use_id, await next(e)) : next(e)))
 

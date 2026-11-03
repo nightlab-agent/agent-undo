@@ -1,0 +1,55 @@
+// Code review 2026-11-02 (s335) of 6de9a3c..51fe765: each finding is a failing test beside a
+// passing comparison case of the nearest normal case.
+import { expect, test } from 'claude-code/testing'
+import { ROOT, bash, repoWorld, start, tick, tool, undo } from './world'
+
+// R1 (kind 2/3). A read-only (core's isReadOnly; the world answers it for a script that returns 'read-only') MCP call (writes nothing) by a subagent, while the main loop's Bash
+// command runs, now costs the Bash command its record; before 51fe765 it was recorded.
+test('R1 fail: a read-only MCP call beside a Bash command leaves the Bash command recorded', async ($, on) => {
+  const repo = repoWorld(on, { 'a.txt': 'a\n' })
+  await start($)
+  let release = () => {}
+  const held = new Promise<void>(r => { release = r })
+  const first = bash($, repo, 'build', async f => { await held; f.set(`${ROOT}/a.txt`, 'a2\n') })
+  await tick()
+  await tool($, repo, 'mcp__github__get_issue', () => 'read-only', { number: 1 })
+  release()
+  await first
+  expect(await undo($, '')).toContain('Bash build (1 file)')
+})
+test('R1 comparison: a read-only built-in call (WebFetch) beside a Bash command leaves it recorded', async ($, on) => {
+  const repo = repoWorld(on, { 'a.txt': 'a\n' })
+  await start($)
+  let release = () => {}
+  const held = new Promise<void>(r => { release = r })
+  const first = bash($, repo, 'build', async f => { await held; f.set(`${ROOT}/a.txt`, 'a2\n') })
+  await tick()
+  await tool($, repo, 'WebFetch', () => {}, { url: 'x' })
+  release()
+  await first
+  expect(await undo($, '')).toContain('Bash build (1 file)')
+})
+test('R1 comparison: an MCP call not held read-only beside a Bash command, though it writes nothing, still costs it its record', async ($, on) => {
+  const repo = repoWorld(on, { 'a.txt': 'a\n' })
+  await start($)
+  let release = () => {}
+  const held = new Promise<void>(r => { release = r })
+  const first = bash($, repo, 'build', async f => { await held; f.set(`${ROOT}/a.txt`, 'a2\n') })
+  await tick()
+  await tool($, repo, 'mcp__github__get_issue', () => {}, { number: 1 })
+  release()
+  await first
+  expect(await undo($, '')).not.toContain('Bash build')
+})
+test('R1 comparison: a read-only MCP call still running when the Bash command ends costs it its record', async ($, on) => {
+  const repo = repoWorld(on, { 'a.txt': 'a\n' })
+  await start($)
+  let release = () => {}
+  const held = new Promise<void>(r => { release = r })
+  const call = tool($, repo, 'mcp__github__get_issue', async () => { await held; return 'read-only' as const }, { number: 1 })
+  await tick()
+  await bash($, repo, 'build', f => { f.set(`${ROOT}/a.txt`, 'a2\n') })
+  release()
+  await call
+  expect(await undo($, '')).not.toContain('Bash build')
+})

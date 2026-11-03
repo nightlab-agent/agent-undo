@@ -15,6 +15,9 @@ const MAX_FILES = 200
 // fields change: it declines what an earlier version stored.
 const changes = atom({ plugin: 'agent-undo', key: 'changes' } as const, [], { shape: 'changes-2' })
 const SHAPE = 'changes-2'
+// The session id whose list `changes` already is in this process. It lives in `$.state`, so a reload,
+// enable or worker respawn (session.start again, the list kept) does not read the store copy again.
+const listed = atom({ plugin: 'agent-undo', key: 'listed' } as const, '', { shape: 'listed-1' })
 
 // A copy of the list in the plugin's store, `changes:<session id>` = { shape, list }, so a new
 // process for the same session finds it (`$.state` does not outlive the process). Each copy has its
@@ -101,7 +104,11 @@ export async function restoreList($: EngineInterface): Promise<void> {
         id,
         // A restore that settles after a newer one began (/clear: a new id, same process) is not this session's.
         done: restore($, id).then(
-          may => { if (restoring === mine && may) restored = id },
+          async may => {
+            if (restoring !== mine || !may) return
+            restored = id
+            await update($, listed, () => id)
+          },
           () => { if (restoring === mine) restoring = undefined },
         ),
       }
@@ -115,6 +122,7 @@ export async function restoreList($: EngineInterface): Promise<void> {
 
 /** True when this process may write the session's copy: none was stored, or it is now the list. */
 async function restore($: EngineInterface, id: string): Promise<boolean> {
+  if ((await read($, listed)) === id) return true
   // One more try for a read refused once (the file busy); a second refusal leaves no copy written.
   const got = await $.store.get(keyOf(id)).catch(() => $.store.get(keyOf(id)))
   if (!got || typeof got !== 'object') return true

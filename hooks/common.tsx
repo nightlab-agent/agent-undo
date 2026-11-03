@@ -150,11 +150,35 @@ async function restore($: EngineInterface, id: string): Promise<boolean> {
   // A /clear between that check and the write put the copy into the new conversation's list:
   // asked again, the id says so, and exactly the entries taken come out (its own edits stay).
   if ((await $.session.id()) === id) return true
-  const mine = new Set(ok.map(c => JSON.stringify(c)))
-  await update($, changes, now => now.filter(c => !mine.has(JSON.stringify(c))))
-  // The new conversation's edits in that gap mirrored the copy into its store: write it again.
+  // An entry is known by its number, time and file: an undo in the gap marks a hunk undone, and the
+  // entry is still the one taken.
+  const mine = new Set(ok.map(entryKey))
+  await update($, changes, now => now.filter(c => !mine.has(entryKey(c))))
+  // The new conversation's edits in that gap mirrored the copy into its store, and a second /clear
+  // may have come since: every other session's stored copy loses the taken entries.
+  await scrub($, id, mine)
   await mirror($)
   return false
+}
+
+const entryKey = (c: Change) => `${c.n}|${c.at}|${c.file}`
+
+/** Takes `keys` out of every stored copy but `owner`'s, in the save queue; a failure leaves that copy. */
+function scrub($: EngineInterface, owner: string, keys: Set<string>): Promise<void> {
+  const p = saving.then(async () => {
+    for (const { id } of await copies($)) {
+      if (id === owner) continue
+      try {
+        const got = await $.store.get(keyOf(id))
+        const list = (got as { shape?: unknown; list?: unknown } | undefined)?.list
+        if ((got as { shape?: unknown } | undefined)?.shape !== SHAPE || !Array.isArray(list)) continue
+        const kept = (list as Change[]).filter(c => !keys.has(entryKey(c)))
+        if (kept.length !== list.length) await $.store.set(keyOf(id), { shape: SHAPE, list: kept })
+      } catch {}
+    }
+  }).catch(() => undefined)
+  saving = p
+  return p
 }
 
 /** Changes the session's list, then mirrors it to the store. */

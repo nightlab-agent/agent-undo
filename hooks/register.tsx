@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Change, Hunk } from '../types'
 import { editing, forgetRestore, record, restoreList, serial, slashed, snapped, time, updateList } from './common'
-import { registerShell, resetShells, shellStopped, spelled, undoShell } from './shell'
+import { ownTool, registerShell, resetShells, shellStopped, spelled, undoShell } from './shell'
 
 // The session's list (the same plugin, key and shape in each file that reads or writes it: the
 // engine's scan lists a module's state per file). Change the tag in both (and SHAPE in common.tsx) when a Change's
@@ -197,7 +197,7 @@ export const register: Register = on => {
       name: 'agent-undo',
       description: "List Claude's edits in this session, or undo one: /agent-undo 3.1 (one hunk) or /agent-undo 3",
     })
-    await $.tool.register({
+    const reg = await $.tool.register({
       name: 'undo',
       description: "Lists the edits you (and your subagents) made to files in this session, numbered, each hunk as <edit>.<hunk>; " +
         'for a Bash command, each file it changed, deleted or created as <command>.<file>; ' +
@@ -207,6 +207,7 @@ export const register: Register = on => {
       inputSchema: { type: 'object', properties: { ref: { type: 'string', description: '"" to list; "3" or "3.2" to undo' } } },
       isDeferred: false,
     })
+    ownTool((reg as { tool?: unknown } | undefined)?.tool)
     return next(e)
   })
 

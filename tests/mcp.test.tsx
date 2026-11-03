@@ -3,6 +3,7 @@
 // undo is the shell undo. agent-undo's own tool and any non-MCP tool are left alone.
 import { expect, test } from 'claude-code/testing'
 import { isMcp, mcpLabel } from '../hooks/register'
+import { ownTool } from '../hooks/shell'
 import { ROOT, bash, repoWorld, start, tick, tool, undo } from './world'
 
 const WRITE = 'mcp__filesystem__write_file'
@@ -115,11 +116,22 @@ test("which tools are wrapped: every mcp__ tool but agent-undo's own; nothing el
   expect(isMcp('mcp__filesystem__write_file')).toBe(true)
   expect(isMcp('mcp__claude_ai_Claude_Docs__update')).toBe(true)
   expect(isMcp('mcp__agent-undo__undo')).toBe(false)
-  expect(isMcp('mcp__agent-undo__anything')).toBe(false)
+  // Only the exact name: another tool under a server named agent-undo is another server's.
+  expect(isMcp('mcp__agent-undo__anything')).toBe(true)
   expect(isMcp('mcp__agent-undo-fork__undo')).toBe(true)
   expect(isMcp('Bash')).toBe(false)
   expect(isMcp('NotebookEdit')).toBe(false)
   expect(isMcp(undefined)).toBe(false)
+})
+
+test('the name $.tool.register returned is the one left alone, not the default', async () => {
+  ownTool('mcp__plugin_agent-undo_agent-undo__undo')
+  try {
+    expect(isMcp('mcp__plugin_agent-undo_agent-undo__undo')).toBe(false)
+    expect(isMcp('mcp__agent-undo__undo')).toBe(true)
+  } finally {
+    ownTool('mcp__agent-undo__undo')
+  }
 })
 
 test('the label names the server and the tool on one line', async () => {

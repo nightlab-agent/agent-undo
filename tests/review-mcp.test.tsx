@@ -53,3 +53,19 @@ test('R1 comparison: a read-only MCP call still running when the Bash command en
   await call
   expect(await undo($, '')).not.toContain('Bash build')
 })
+
+// R2 (kind 3). Our own tool is excluded by the server-name prefix, so any configured server named
+// agent-undo (a different server) is never recorded. d.ts:6131 "Key trust on source, not on the
+// name or the tool-name prefix."
+test('R2 fail: a configured server named agent-undo that writes a file is recorded', async ($, on) => {
+  const repo = repoWorld(on, { 'a.txt': 'a\n' })
+  await start($)
+  await tool($, repo, 'mcp__agent-undo__write_file', f => { f.set(`${ROOT}/a.txt`, 'x\n') })
+  expect(await undo($, '')).toContain('1.1 changed a.txt')
+})
+test('R2 comparison: a server named agent-undo-fork that writes a file is recorded', async ($, on) => {
+  const repo = repoWorld(on, { 'a.txt': 'a\n' })
+  await start($)
+  await tool($, repo, 'mcp__agent-undo-fork__write_file', f => { f.set(`${ROOT}/a.txt`, 'x\n') })
+  expect(await undo($, '')).toContain('1.1 changed a.txt')
+})

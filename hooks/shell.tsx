@@ -152,10 +152,13 @@ const take = (id: unknown) => {
   return sh
 }
 
-/** agent-undo's own model tool (`mcp__<plugin>__<name>`): its undo is not a change to record. */
-const OWN = 'mcp__agent-undo__'
+/** agent-undo's own model tool, exactly the name `$.tool.register` returned (its undo is not a change to
+ * record); until it answers, the name its own hook serves. Only that name: a configured server that
+ * happens to be named agent-undo is another server and is recorded. */
+let own = 'mcp__agent-undo__undo'
+export const ownTool = (name: unknown) => { if (typeof name === 'string' && name.startsWith('mcp__')) own = name }
 /** An MCP tool's call, by its wire name, that is not this mod's own. */
-export const isMcp = (tool: unknown): tool is string => typeof tool === 'string' && tool.startsWith('mcp__') && !tool.startsWith(OWN)
+export const isMcp = (tool: unknown): tool is string => typeof tool === 'string' && tool.startsWith('mcp__') && tool !== own
 /** `mcp__filesystem__write_file` as `filesystem write_file`: one line, at most 60 characters. */
 export const mcpLabel = (tool: string) => {
   const rest = tool.slice('mcp__'.length)

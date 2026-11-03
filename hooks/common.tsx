@@ -194,7 +194,7 @@ async function restore($: EngineInterface, id: string): Promise<{ may: boolean; 
     // An earlier restore of this session in this process (one a /clear and /resume overtook) filled it.
     if (missing.length === 0) return (had = true, now)
     const low = Math.min(...now.map(c => c.n))
-    return missing.every(c => c.n < low) ? (added = missing, [...missing, ...now]) : now
+    return missing.every(c => c.n < low) ? (added = missing, [...missing, ...now].slice(-MAX_CHANGES)) : now
   })
   if (had) return (await $.session.id()) === id ? yes : no
   if (added.length === 0) return no

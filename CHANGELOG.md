@@ -25,7 +25,9 @@
   (`tests/review-undo13ts.test.tsx`, L1, L2).
 - After a /clear, a stored-copy write that never finishes no longer holds `/agent-undo` and every
   later Edit and Write: the next conversation's first read waits for it a second at most
-  (`tests/review-undo13.test.tsx`, L1).
+  (`tests/review-undo13.test.tsx`, L1). If the write has not landed by then, the stored copy is
+  not read and not written over: a write that lands later is kept, and the copy is read once it has
+  (`tests/review-undo14.test.tsx`, R2; `tests/review-undo14ts.test.tsx`).
 - A /clear and a /resume back (or a /resume to another conversation) while the stored list was
   still being read no longer stops the rest of the session's edits from being stored: a read that
   finds its stored entries already listed counts as done, stored entries numbered below every

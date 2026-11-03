@@ -81,9 +81,10 @@ export async function mirrorEnding($: EngineInterface, id: string): Promise<void
   saving = saving.then(() => save($, ending)).catch(() => undefined)
 }
 
-/** Waits for the queued saves, at most `ms` (the engine's own example saves in session.end before its end step). */
-export async function saved($: EngineInterface, ms: number, signal?: AbortSignal): Promise<void> {
-  if (!(ms > 0) || signal?.aborted) return
+/** Waits for the queued saves, at most `ms` (the engine's own example saves in session.end before its end step);
+ * true when the queue stood still before the bound. */
+export async function saved($: EngineInterface, ms: number, signal?: AbortSignal): Promise<boolean> {
+  if (!(ms > 0) || signal?.aborted) return false
   // Ends at the bound or at the chain's abort. The engine's declarations type no timer but $.clock's (and a hot
   // reload cancels only those), so a sleep refused for another reason (a mod above denies it) leaves the abort
   // to end it, the hook's own budget then the cap; with no signal to wait for, the wait ends at once.
@@ -91,11 +92,12 @@ export async function saved($: EngineInterface, ms: number, signal?: AbortSignal
     signal?.addEventListener('abort', () => done(), { once: true })
     if (Number.isFinite(ms)) $.clock.sleep(ms, { signal }).then(done, () => { if (!signal || signal.aborted) done() })
   })
-  // A save queued during the wait (an edit landing while the conversation ends) replaces `saving`: wait until
-  // the queue stands still, under the same bound.
-  const drained = (async () => { for (let p = saving; ; p = saving) { await p; if (p === saving) return } })()
-  await Promise.race([drained, bound])
+  return Promise.race([still().then(() => true), bound.then(() => false)])
 }
+
+// A save queued during the wait (an edit landing while the conversation ends) replaces `saving`: this settles when
+// the queue stands still.
+const still = async () => { for (let p = saving; ; p = saving) { await p; if (p === saving) return } }
 
 async function save($: EngineInterface, ending?: { id: string; list: Change[] }) {
   const id = ending?.id ?? await $.session.id()
@@ -163,12 +165,18 @@ export async function restoreList($: EngineInterface): Promise<void> {
 
 /** `may`: this process may write the session's copy (none was stored, or all of it is now in the list);
  * `grew`: stored entries went in before entries already listed, so the copy lacks those. */
+let late: { id: string; still: boolean } | undefined
+
 async function restore($: EngineInterface, id: string): Promise<{ may: boolean; grew: boolean }> {
   const yes = { may: true, grew: false }, no = { may: false, grew: false }
   if ((await read($, listed)) === id) return yes
   // A save of this id's copy still queued (a /clear and a /resume back in the same window) lands before the read,
   // a second at most: this runs in the queue every Edit and Write waits in, so a write that never lands holds none.
-  await saved($, 1000)
+  // Past the second the copy may be older than that write: it is not read and this process does not write it.
+  // Later reads do not wait again; they look once the queue stands still. The trade: a write that hangs costs one
+  // second once, and until a late one lands this conversation's new edits stay out of its copy.
+  if (late?.id === id) { if (!late.still) return no; late = undefined }
+  else if (!(await saved($, 1000))) { const l = { id, still: false as boolean }; late = l; void still().then(() => { l.still = true }); return no }
   // One more try for a read refused once (the file busy); a second refusal leaves no copy written.
   const got = await $.store.get(keyOf(id)).catch(() => $.store.get(keyOf(id)))
   if (!got || typeof got !== 'object') return yes

@@ -90,7 +90,7 @@ there: not yet seen on a screen.)
 
 An MCP tool's write is listed the same way, by server and tool:
 
-![Claude Code listing two writes by an MCP tool with agent-undo, then undoing only the change to src/greet.py](https://raw.githubusercontent.com/nightlab-agent/agent-undo/a03519efa69c982975898cfab3bc6bda8e1c8488/docs/preview-mcp.png)
+![Claude Code listing two writes by an MCP tool with agent-undo, then undoing only the change to src/greet.py](https://raw.githubusercontent.com/nightlab-agent/agent-undo/d4622887711e1c788b4b1858911c3104de233964/docs/preview-mcp.png)
 
 Seen in a Claude Code 2.1.312 terminal on 2026-11-02, with permissions
 bypassed and one small MCP server (`preview/mcp-writer.js`, its `write_file`

@@ -182,3 +182,25 @@ test('comparison: a new process under another session id shows no edit in the st
   await new Promise(r => setTimeout(r, 0))
   expect(w.statuses.some(t => t.includes('/agent-undo'))).toBe(false)
 })
+
+test('a /clear empties the status line, so the new conversation shows no change of the old one', async ($, on) => {
+  const w = world(on, { 'a.txt': 'one\ntwo\n' })
+  on('session.end', (_, e: any) => ({ sessionId: e.sessionId }) as never)
+  await start($)
+  await edit($, 'a.txt', 'two', 'TWO')
+  w.statuses.length = 0
+  await ($ as any).session.end({ reason: 'clear', sessionId: 's1', resume: { id: 's1' } })
+  expect(w.statuses.at(-1)).toBe('undefined')
+})
+
+test('comparison: after a /clear, the next edit is named in the status line', async ($, on) => {
+  const w = world(on, { 'a.txt': 'one\ntwo\n', 'b.txt': 'x\n' })
+  on('session.end', (_, e: any) => ({ sessionId: e.sessionId }) as never)
+  await start($)
+  await edit($, 'a.txt', 'two', 'TWO')
+  await ($ as any).session.end({ reason: 'clear', sessionId: 's1', resume: { id: 's1' } })
+  w.state.clear()
+  w.sid = 's2'
+  await edit($, 'b.txt', 'x', 'y')
+  expect(w.statuses.at(-1)).toBe('#1 b.txt (1 hunk) · /agent-undo')
+})

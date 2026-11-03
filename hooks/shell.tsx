@@ -305,6 +305,8 @@ export const shellStopped = () => stopped
 export const registerShell = (on: Parameters<Register>[0]) => {
   on('session.end', async ($, e, next) => {
     resetShells()
+    // The status line names this conversation's newest change; after a /clear it is not the next one's.
+    try { $.ui.status(undefined) } catch {}
     return next(e)
   })
 

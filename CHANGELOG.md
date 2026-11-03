@@ -37,7 +37,8 @@
   `tests/review-undo15.test.tsx`, S1, S2). A second known limit: a write the store never finishes
   is waited for with no bound by the ending conversation's copy and by the cleanup of other stored
   copies, so neither is written in that process (later edits are still saved, each after a second;
-  `tests/review-undo18.test.tsx` shows both waits). A bound there would let that write land last,
+  `tests/review-undo17.test.tsx` X1 and `tests/review-undo18.test.tsx` Y1 show the two waits;
+  `tests/review-undo16.test.tsx` N1 the later edits). A bound there would let that write land last,
   over the newer copy.
 - A Bash command or MCP call that changed files and is still being recorded when a /clear or an
   exit comes is waited for too, under the same second (`tests/review-undo15ts.test.tsx`, B1).

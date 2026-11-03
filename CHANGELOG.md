@@ -34,7 +34,11 @@
   (`tests/review-undo17.test.tsx`, X1, X1b, X2; `tests/review-undo17ts.test.tsx`, T1). A known
   limit: a write that lands later still is written over, so edits only it carried leave the undo
   list (their files keep them) (`tests/review-undo14.test.tsx`, R2;
-  `tests/review-undo15.test.tsx`, S1, S2).
+  `tests/review-undo15.test.tsx`, S1, S2). A second known limit: a write the store never finishes
+  is waited for with no bound by the ending conversation's copy and by the cleanup of other stored
+  copies, so neither is written in that process (later edits are still saved, each after a second;
+  `tests/review-undo18.test.tsx` shows both waits). A bound there would let that write land last,
+  over the newer copy.
 - A Bash command or MCP call that changed files and is still being recorded when a /clear or an
   exit comes is waited for too, under the same second (`tests/review-undo15ts.test.tsx`, B1).
 - A /clear and a /resume back (or a /resume to another conversation) while the stored list was

@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import { ROOT, bash, repoWorld, start, tick, undo } from './world'
-test('R4 Bash variant (pre-existing?): an undo while a Bash command runs', async ($, on) => {
+test('Bash: an undo while a Bash command runs', async ($, on) => {
   const repo = repoWorld(on, { 'a.txt': 'a\n', 'b.txt': 'b\n' })
   await start($)
   await bash($, repo, 'one', f => { f.set(`${ROOT}/a.txt`, 'a2\n') })

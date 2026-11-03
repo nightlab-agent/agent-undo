@@ -108,7 +108,7 @@ test('review3 F1: one failed store read at the first restore loses the earlier e
   expect(text).toContain('Edit a.txt')
 })
 
-test('F1b: a store read that keeps failing never writes a shorter list over the stored one', async ($, on) => {
+test('a store read that keeps failing never writes a shorter list over the stored one', async ($, on) => {
   const w = world(on, { 'a.txt': 'one\n', 'b.txt': 'x\n', 'c.txt': 'p\n' })
   await start($)
   await edit($, 'a.txt', 'one', 'ONE')

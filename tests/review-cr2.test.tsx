@@ -30,7 +30,7 @@ const held = () => {
 }
 
 // --- R1 one step later ---
-test('P1 two read-only MCP calls, both ended inside one Bash command: the command is recorded', async ($, on) => {
+test('two read-only MCP calls, both ended inside one Bash command: the command is recorded', async ($, on) => {
   const repo = repoWorld(on, { 'a.txt': 'a\n' })
   await start($)
   const h = held()
@@ -44,7 +44,7 @@ test('P1 two read-only MCP calls, both ended inside one Bash command: the comman
   await first
   expect(await undo($, '')).toContain('Bash build (1 file)')
 })
-test('P2 two MCP calls in one Bash command, one read-only, one not: the command is not recorded', async ($, on) => {
+test('two MCP calls in one Bash command, one read-only, one not: the command is not recorded', async ($, on) => {
   const repo = repoWorld(on, { 'a.txt': 'a\n', 'b.txt': 'b\n' })
   await start($)
   const h = held()
@@ -59,7 +59,7 @@ test('P2 two MCP calls in one Bash command, one read-only, one not: the command 
   expect(await undo($, '')).not.toContain('Bash build')
 })
 
-test('F1 comparison: the same writing call not marked read-only: nothing is recorded for the command', async ($, on) => {
+test('for comparison, the same writing call not marked read-only: nothing is recorded for the command', async ($, on) => {
   const repo = repoWorld(on, { 'a.txt': 'a\n', 'b.txt': 'b\n' })
   await start($)
   const h = held()
@@ -79,7 +79,7 @@ const hunkEdits = (on: Parameters<typeof repoWorld>[0], files: () => Map<string,
     return { result: { filePath: e.file_path, oldString: e.old_string, newString: e.new_string, originalFile: was,
       structuredPatch: patchOf(was, now), userModified: false, replaceAll: false } }
   }) as never)
-test('P3 an Edit hunk undone while a Bash command runs is not recorded as the command\'s change', async ($, on) => {
+test('an Edit hunk undone while a Bash command runs is not recorded as the command\'s change', async ($, on) => {
   let r: { files: Map<string, string> } | undefined
   hunkEdits(on, () => r!.files)
   const repo = repoWorld(on, { 'a.txt': 'one\n', 'b.txt': 'b\n' }); r = repo
@@ -95,7 +95,7 @@ test('P3 an Edit hunk undone while a Bash command runs is not recorded as the co
   expect(text).toContain('Bash two (1 file)')
   expect(text).not.toContain('changed a.txt')
 })
-test('P4 an undo during two open windows (Bash + MCP) is taken by neither', async ($, on) => {
+test('an undo during two open windows (Bash + MCP) is taken by neither', async ($, on) => {
   const repo = repoWorld(on, { 'a.txt': 'a\n', 'b.txt': 'b\n' })
   await start($)
   await bash($, repo, 'one', f => { f.set(`${ROOT}/a.txt`, 'a2\n') })
@@ -112,7 +112,7 @@ test('P4 an undo during two open windows (Bash + MCP) is taken by neither', asyn
 // R4 one step earlier: the undo marks open windows, then awaits its git restore; a Bash command
 // whose window opens during that await (a subagent's) is not marked, and its before-snapshot
 // predates the restore. Edits use inFlight for this; the undo does not.
-test('P5 (passes: snapshots queue behind the restore on the private index): a Bash window that opens while an undo\'s restore runs does not take the restore as its change', async ($, on) => {
+test('a Bash window that opens while an undo\'s restore runs does not take the restore as its change (passes: snapshots queue behind the restore on the private index)', async ($, on) => {
   let gate: Promise<void> | undefined
   let opened = () => {}
   // The world's own git, with its restore held open (the world registers process.run once).
@@ -143,7 +143,7 @@ test('P5 (passes: snapshots queue behind the restore on the private index): a Ba
   expect(text).toContain('Bash two')
   expect(text).not.toContain('2.1 changed a.txt')
 })
-test('F2 comparison: the same Bash window opened just after the undo finished lists only b.txt', async ($, on) => {
+test('for comparison, the same Bash window opened just after the undo finished lists only b.txt', async ($, on) => {
   const repo = repoWorld(on, { 'a.txt': 'a\n', 'b.txt': 'b\n' })
   await start($)
   await bash($, repo, 'one', f => { f.set(`${ROOT}/a.txt`, 'a2\n') })
@@ -165,7 +165,7 @@ const holdWrites = (on: Parameters<typeof repoWorld>[0], ctl: { gate?: Promise<v
       return inner(x, e)
     })
   }) as typeof on
-test('F3 fail: a Bash window that opens while a hunk undo\'s write is in flight does not take it as its change', async ($, on) => {
+test('a Bash window that opens while a hunk undo\'s write is in flight does not take it as its change', async ($, on) => {
   const ctl: { gate?: Promise<void>; opened: () => void } = { opened: () => {} }
   const w = holdWrites(on, ctl)
   let r: { files: Map<string, string> } | undefined
@@ -189,7 +189,7 @@ test('F3 fail: a Bash window that opens while a hunk undo\'s write is in flight 
   expect(text).toContain('Bash two')
   expect(text).not.toContain('2.1 changed a.txt')
 })
-test('F3 comparison: the Bash window opened just after the hunk undo lists only b.txt', async ($, on) => {
+test('for comparison, the Bash window opened just after the hunk undo lists only b.txt', async ($, on) => {
   let r: { files: Map<string, string> } | undefined
   hunkEdits(on, () => r!.files)
   const repo = repoWorld(on, { 'a.txt': 'one\n', 'b.txt': 'b\n' }); r = repo

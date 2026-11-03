@@ -88,7 +88,7 @@ const APP = ['import x', '', 'function a() {', '  return 1', '}', '', 'function 
 // ---- Kind 4: a staged edit (held for review, file unchanged) is listed as made ----------------
 // Engine types 2.1.312, claude-code.d.ts:21752 (Edit) and :22662 (Write):
 // "staged?: boolean  True when the edit was held for the machine owner to review instead of written; the file is unchanged"
-test('review K4a FAIL: a staged Edit (file unchanged) is not listed as an edit Claude made', async ($, on) => {
+test('a staged Edit (file unchanged) is not listed as an edit Claude made', async ($, on) => {
   const files = world(on, { [`${ROOT}/app.ts`]: APP }, {
     answer: x => ({ result: { filePath: x.file_path, oldString: '  return 2', newString: '  return 20', originalFile: APP,
       structuredPatch: patchOf(APP, APP.replace('  return 2', '  return 20')), userModified: false, replaceAll: false, staged: true } }),
@@ -99,14 +99,14 @@ test('review K4a FAIL: a staged Edit (file unchanged) is not listed as an edit C
   expect(await undo($, '')).toContain('no edits by Claude in this session yet')
 })
 
-test('review K4a comparison PASS: an Edit that was written is listed', async ($, on) => {
+test('for comparison, an Edit that was written is listed', async ($, on) => {
   world(on, { [`${ROOT}/app.ts`]: APP })
   await start($)
   await edit($, 'app.ts', '  return 2', '  return 20')
   expect(await undo($, '')).toContain('#1 ')
 })
 
-test('review K4b FAIL: a staged Write of a new file is not listed as "(new file)"', async ($, on) => {
+test('a staged Write of a new file is not listed as "(new file)"', async ($, on) => {
   const files = world(on, {}, {
     answer: x => ({ result: { type: 'create', filePath: x.file_path, content: x.content, structuredPatch: [], originalFile: null, staged: true } }),
   })
@@ -118,7 +118,7 @@ test('review K4b FAIL: a staged Write of a new file is not listed as "(new file)
 
 // ---- Kind 4: "\ No newline at end of file" is dropped, so an undo keeps the newline the edit added ----
 // jsdiff's structuredPatch (the engine's diff) writes that marker line after the line that lacks a newline.
-test('review K4c FAIL: undoing a Write that added the final newline gives back the file without it', async ($, on) => {
+test('undoing a Write that added the final newline gives back the file without it', async ($, on) => {
   const was = 'x\ny'
   const now = 'x\nY\n'
   const files = world(on, { [`${ROOT}/f.txt`]: was }, {
@@ -134,7 +134,7 @@ test('review K4c FAIL: undoing a Write that added the final newline gives back t
   expect(files.get(`${ROOT}/f.txt`)).toBe(was)
 })
 
-test('review K4c comparison PASS: undoing a Write where both versions end in a newline gives back the file', async ($, on) => {
+test('for comparison, undoing a Write where both versions end in a newline gives back the file', async ($, on) => {
   const was = 'x\ny\n'
   const files = world(on, { [`${ROOT}/f.txt`]: was })
   await start($)
@@ -143,12 +143,12 @@ test('review K4c comparison PASS: undoing a Write where both versions end in a n
   expect(files.get(`${ROOT}/f.txt`)).toBe(was)
 })
 
-test('review K4d FAIL: undoing a Write that emptied a file gives back its final newline', () => {
+test('undoing a Write that emptied a file gives back its final newline', () => {
   // structuredPatch('a\nb\n' -> ''): one hunk, lines ['-a', '-b'].
   expect(undoHunk('', { before: ['a', 'b'], after: [], line: 0 })).toEqual({ text: 'a\nb\n' })
 })
 
-test('review K4d comparison PASS: a hunk with lines left in the file keeps the final newline', () => {
+test('for comparison, a hunk with lines left in the file keeps the final newline', () => {
   expect(undoHunk('a\nB\n', { before: ['a', 'b'], after: ['a', 'B'], line: 1 })).toEqual({ text: 'a\nb\n' })
 })
 
@@ -168,7 +168,7 @@ const TWO = (() => {
   return l.join('\n')
 })()
 
-test('review K2a FAIL: two undos of two edits in one file at once both stay undone', async ($, on) => {
+test('two undos of two edits in one file at once both stay undone', async ($, on) => {
   const files = world(on, { [`${ROOT}/t.txt`]: TWO })
   await start($)
   await edit($, 't.txt', 'A', 'AA')
@@ -179,7 +179,7 @@ test('review K2a FAIL: two undos of two edits in one file at once both stay undo
   expect(files.get(`${ROOT}/t.txt`)).toBe(TWO)
 })
 
-test('review K2a comparison PASS: the same two undos one after the other', async ($, on) => {
+test('for comparison, the same two undos one after the other', async ($, on) => {
   const files = world(on, { [`${ROOT}/t.txt`]: TWO })
   await start($)
   await edit($, 't.txt', 'A', 'AA')
@@ -189,7 +189,7 @@ test('review K2a comparison PASS: the same two undos one after the other', async
   expect(files.get(`${ROOT}/t.txt`)).toBe(TWO)
 })
 
-test('review K2b FAIL: an Edit by Claude (or a subagent) that lands while an undo reads the file is kept', async ($, on) => {
+test('an Edit by Claude (or a subagent) that lands while an undo reads the file is kept', async ($, on) => {
   // The Edit starts while the undo is reading. It is not awaited inside the read: the engine's
   // fs.read never waits on a tool call (awaiting it here would deadlock on the mod's own queue).
   let during: (() => Promise<unknown>) | undefined
@@ -205,7 +205,7 @@ test('review K2b FAIL: an Edit by Claude (or a subagent) that lands while an und
   expect(files.get(`${ROOT}/t.txt`)).toBe(TWO.replace('p16', 'p16 // subagent'))
 })
 
-test('review K2b comparison PASS: the same Edit landing just before the undo is kept', async ($, on) => {
+test('for comparison, the same Edit landing just before the undo is kept', async ($, on) => {
   const files = world(on, { [`${ROOT}/t.txt`]: TWO })
   await start($)
   await edit($, 't.txt', 'A', 'AA')
@@ -229,7 +229,7 @@ const raWorld = (on: On) => world(on, { [`${ROOT}/r.txt`]: RA_BEFORE }, {
   },
 })
 
-test('review K3 FAIL: replace_all, undo 1.1 then 1.3; 1.3\'s lines are untouched and undo', async ($, on) => {
+test('replace_all, undo 1.1 then 1.3; 1.3\'s lines are untouched and undo', async ($, on) => {
   const files = raWorld(on)
   await start($)
   await edit($, 'r.txt', 'old', 'new1\nnew2')
@@ -238,7 +238,7 @@ test('review K3 FAIL: replace_all, undo 1.1 then 1.3; 1.3\'s lines are untouched
   expect(await undo($, '1.3')).toContain('undid 1.3')
 })
 
-test('review K3 comparison PASS: replace_all, undo 1.3 then 1.1', async ($, on) => {
+test('for comparison, replace_all, undo 1.3 then 1.1', async ($, on) => {
   const files = raWorld(on)
   await start($)
   await edit($, 'r.txt', 'old', 'new1\nnew2')
@@ -249,7 +249,7 @@ test('review K3 comparison PASS: replace_all, undo 1.3 then 1.1', async ($, on) 
 })
 
 // ---- Kind 6: on Windows paths are not shown from the project ----
-test('review K6 FAIL: a Windows path is listed from the project root', async ($, on) => {
+test('a Windows path is listed from the project root', async ($, on) => {
   const WROOT = 'C:\\proj'
   world(on, { [`${WROOT}\\app.ts`]: APP }, { root: WROOT })
   await start($)
@@ -257,7 +257,7 @@ test('review K6 FAIL: a Windows path is listed from the project root', async ($,
   expect(await undo($, '')).toContain('Edit app.ts')
 })
 
-test('review K6 comparison PASS: a POSIX path is listed from the project root', async ($, on) => {
+test('for comparison, a POSIX path is listed from the project root', async ($, on) => {
   world(on, { [`${ROOT}/app.ts`]: APP })
   await start($)
   await edit($, 'app.ts', '  return 2', '  return 20')

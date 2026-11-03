@@ -5,7 +5,7 @@ import { ROOT, bash, repoWorld, start, tick, tool, undo } from './world'
 
 // R1 (kind 2/3). A read-only (core's isReadOnly; the world answers it for a script that returns 'read-only') MCP call (writes nothing) by a subagent, while the main loop's Bash
 // command runs, now costs the Bash command its record; before 51fe765 it was recorded.
-test('R1 fail: a read-only MCP call beside a Bash command leaves the Bash command recorded', async ($, on) => {
+test('a read-only MCP call beside a Bash command leaves the Bash command recorded', async ($, on) => {
   const repo = repoWorld(on, { 'a.txt': 'a\n' })
   await start($)
   let release = () => {}
@@ -17,7 +17,7 @@ test('R1 fail: a read-only MCP call beside a Bash command leaves the Bash comman
   await first
   expect(await undo($, '')).toContain('Bash build (1 file)')
 })
-test('R1 comparison: a read-only built-in call (WebFetch) beside a Bash command leaves it recorded', async ($, on) => {
+test('for comparison, a read-only built-in call (WebFetch) beside a Bash command leaves it recorded', async ($, on) => {
   const repo = repoWorld(on, { 'a.txt': 'a\n' })
   await start($)
   let release = () => {}
@@ -29,7 +29,7 @@ test('R1 comparison: a read-only built-in call (WebFetch) beside a Bash command 
   await first
   expect(await undo($, '')).toContain('Bash build (1 file)')
 })
-test('R1 comparison: an MCP call not held read-only beside a Bash command, though it writes nothing, still costs it its record', async ($, on) => {
+test('for comparison, an MCP call not held read-only beside a Bash command, though it writes nothing, still costs it its record', async ($, on) => {
   const repo = repoWorld(on, { 'a.txt': 'a\n' })
   await start($)
   let release = () => {}
@@ -41,7 +41,7 @@ test('R1 comparison: an MCP call not held read-only beside a Bash command, thoug
   await first
   expect(await undo($, '')).not.toContain('Bash build')
 })
-test('R1 comparison: a read-only MCP call still running when the Bash command ends costs it its record', async ($, on) => {
+test('for comparison, a read-only MCP call still running when the Bash command ends costs it its record', async ($, on) => {
   const repo = repoWorld(on, { 'a.txt': 'a\n' })
   await start($)
   let release = () => {}
@@ -57,13 +57,13 @@ test('R1 comparison: a read-only MCP call still running when the Bash command en
 // R2 (kind 3). Our own tool is excluded by the server-name prefix, so any configured server named
 // agent-undo (a different server) is never recorded. d.ts:6131 "Key trust on source, not on the
 // name or the tool-name prefix."
-test('R2 fail: a configured server named agent-undo that writes a file is recorded', async ($, on) => {
+test('a configured server named agent-undo that writes a file is recorded', async ($, on) => {
   const repo = repoWorld(on, { 'a.txt': 'a\n' })
   await start($)
   await tool($, repo, 'mcp__agent-undo__write_file', f => { f.set(`${ROOT}/a.txt`, 'x\n') })
   expect(await undo($, '')).toContain('1.1 changed a.txt')
 })
-test('R2 comparison: a server named agent-undo-fork that writes a file is recorded', async ($, on) => {
+test('for comparison, a server named agent-undo-fork that writes a file is recorded', async ($, on) => {
   const repo = repoWorld(on, { 'a.txt': 'a\n' })
   await start($)
   await tool($, repo, 'mcp__agent-undo-fork__write_file', f => { f.set(`${ROOT}/a.txt`, 'x\n') })
@@ -72,7 +72,7 @@ test('R2 comparison: a server named agent-undo-fork that writes a file is record
 
 // R4 (kind 2). The person's /agent-undo while an MCP call runs: the undo's own restore lands in
 // the MCP call's window and is recorded as the MCP call's change.
-test("R4 fail: an undo run while an MCP call runs is not recorded as that call's change", async ($, on) => {
+test("an undo run while an MCP call runs is not recorded as that call's change", async ($, on) => {
   const repo = repoWorld(on, { 'a.txt': 'a\n', 'b.txt': 'b\n' })
   await start($)
   await bash($, repo, 'one', f => { f.set(`${ROOT}/a.txt`, 'a2\n') })
@@ -87,7 +87,7 @@ test("R4 fail: an undo run while an MCP call runs is not recorded as that call's
   expect(text).toContain('MCP filesystem write_file (1 file)')
   expect(text).not.toContain('2.1 changed a.txt')
 })
-test('R4 comparison: an undo before the MCP call; the call lists only its own file', async ($, on) => {
+test('for comparison, an undo before the MCP call; the call lists only its own file', async ($, on) => {
   const repo = repoWorld(on, { 'a.txt': 'a\n', 'b.txt': 'b\n' })
   await start($)
   await bash($, repo, 'one', f => { f.set(`${ROOT}/a.txt`, 'a2\n') })
@@ -102,7 +102,7 @@ test('R4 comparison: an undo before the MCP call; the call lists only its own fi
 // interrupted: d.ts:13630 isError "it threw, was interrupted, or answered an error") is not.
 // Kept as a documented limit (the README says so): the errored call records nothing, so a partial
 // write it made is not undone.
-test('R3 limit: an MCP call that writes a file and then errors records nothing (a failed Bash command would list it)', async ($, on) => {
+test('known limit: an MCP call that writes a file and then errors records nothing (a failed Bash command would list it)', async ($, on) => {
   const repo = repoWorld(on, { 'a.txt': 'a\n' })
   await start($)
   await tool($, repo, 'mcp__filesystem__write_file', f => { f.set(`${ROOT}/a.txt`, 'half\n'); return 'error' })
@@ -110,7 +110,7 @@ test('R3 limit: an MCP call that writes a file and then errors records nothing (
   expect(text).not.toContain('1.1 changed a.txt')
   expect(text).toContain('no edits by Claude in this session yet')
 })
-test('R3 comparison: the same MCP call answering ok lists the file', async ($, on) => {
+test('for comparison, the same MCP call answering ok lists the file', async ($, on) => {
   const repo = repoWorld(on, { 'a.txt': 'a\n' })
   await start($)
   await tool($, repo, 'mcp__filesystem__write_file', f => { f.set(`${ROOT}/a.txt`, 'half\n') })

@@ -140,6 +140,9 @@ async function restore($: EngineInterface, id: string): Promise<boolean> {
   if (ok.length === 0) return true
   // Edits listed while the store refused its reads keep their numbers (the user may have seen them),
   // so the stored copy is not merged in; nor is it written over: it outlives this process.
+  // A /clear while the store was read (a new id, the same process, no session.start) makes this copy
+  // another conversation's: it is not taken (s350 review C1).
+  if ((await $.session.id()) !== id) return false
   let took = false
   await update($, changes, now => (now.length === 0 ? (took = true, ok) : now))
   return took

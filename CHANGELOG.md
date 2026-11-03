@@ -29,6 +29,7 @@
   after a resume was seen on a screen (2.1.312, 2026-11-02). A new session, in a preview, starts empty.
 - After a resume the status line names the newest stored change at once (it stayed blank until
   the next change, seen on that screen). The start does not wait for the store.
+  A /clear while that restore is still reading leaves the old session's list out of the new one.
 - When the store is full and an older session's copy must go, a write time that could not be read
   is tried once more, and a copy whose time still cannot be read is kept, not evicted (in the tests).
 - The stored copy: a read refused once is tried again, and no copy is written until the stored

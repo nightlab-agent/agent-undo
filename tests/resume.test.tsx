@@ -1,5 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { TestBody } from 'claude-code/testing'
+import { bash, repoWorld } from './world'
 
 // The list across a new process for the same session (`claude --resume`, as far as a test can
 // tell it): the host's `$.state` is answered here and emptied by `restart`, as a new process
@@ -11,17 +12,12 @@ type $T = Parameters<TestBody>[0]
 
 const ROOT = '/proj'
 
-const world = (on: On, files0: Record<string, string>) => {
-  const files = new Map(Object.entries(files0).map(([k, v]) => [`${ROOT}/${k}`, v]))
+/** The host beneath: the session id, `$.state` (this process's) and `$.store` (the disk's). */
+const host = (on: On) => {
   const disk = new Map<string, unknown>()
-  const w = { files, disk, sid: 's1', state: new Map<string, { value: unknown; version: number }>() }
+  const w = { disk, sid: 's1', state: new Map<string, { value: unknown; version: number }>() }
   const at = (e: { plugin: string; key: string; id?: string }) => `${e.plugin}/${e.key}/${e.id ?? ''}`
-  on('session.root', () => ({ value: ROOT }))
   on('session.id', () => ({ value: w.sid }))
-  on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('command.register', () => ({ value: { command: 'agent-undo' } }))
-  on('tool.register', () => ({ value: undefined }) as never)
-  on('ui.status', () => ({ value: undefined }) as never)
   on('state.get', (_, e) => ({ value: w.state.get(at(e)) ?? { value: undefined, version: 0 } }) as never)
   on('state.set', (_, e) => {
     const was = w.state.get(at(e))?.version ?? 0
@@ -33,6 +29,17 @@ const world = (on: On, files0: Record<string, string>) => {
   on('store.set', (_, e) => { disk.set(e.key, JSON.parse(JSON.stringify(e.value))); return { value: undefined } as never })
   on('store.delete', (_, e) => { disk.delete(e.key); return { value: undefined } as never })
   on('store.keys', () => ({ value: [...disk.keys()] }) as never)
+  return w
+}
+
+const world = (on: On, files0: Record<string, string>) => {
+  const files = new Map(Object.entries(files0).map(([k, v]) => [`${ROOT}/${k}`, v]))
+  const w = Object.assign(host(on), { files })
+  on('session.root', () => ({ value: ROOT }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('command.register', () => ({ value: { command: 'agent-undo' } }))
+  on('tool.register', () => ({ value: undefined }) as never)
+  on('ui.status', () => ({ value: undefined }) as never)
   on('fs.exists', (_, e) => ({ value: files.has(e.path) }))
   on('fs.read', (_, e) => {
     const t = files.get(e.path)
@@ -58,7 +65,7 @@ const world = (on: On, files0: Record<string, string>) => {
 
 const start = ($: $T) => $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
 /** A new process: no `$.state`, the store and (unless changed) the session id as they were. */
-const restart = async ($: $T, w: ReturnType<typeof world>, sid = w.sid) => {
+const restart = async ($: $T, w: ReturnType<typeof host>, sid = w.sid) => {
   w.state.clear()
   w.sid = sid
   await start($)
@@ -139,4 +146,17 @@ test('a restored edit whose lines the person changed since is refused, and the f
   expect(text).toContain('nothing changed in a.txt')
   expect(text).toContain('1.1 left as is: those lines have changed since the edit')
   expect(w.files.get(`${ROOT}/a.txt`)).toBe('one\n2\n')
+})
+
+test('a Bash command restored in a new process undoes, and stays marked undone in the next', async ($, on) => {
+  const repo = repoWorld(on, { 'a.txt': 'a\n' })
+  const w = host(on)
+  await start($)
+  await bash($, repo, 'touch a', f => { f.set(`${ROOT}/a.txt`, 'a2\n') })
+  await restart($, w)
+  expect(await undo($, '')).toContain('Bash touch a')
+  expect(await undo($, '1.1')).toContain('undid 1.1')
+  expect(repo.files.get(`${ROOT}/a.txt`)).toBe('a\n')
+  await restart($, w)
+  expect(await undo($, '')).toContain('1.1 changed a.txt  (undone)')
 })

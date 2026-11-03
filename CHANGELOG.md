@@ -56,8 +56,9 @@
 - Each "a second at most" in this release is timed by Claude Code's own timer. Where another mod
   refuses that timer: an undo and an Edit or Write wait for a stored-copy write that never
   finishes with no bound, as before this release; the end of a conversation (an exit, a /clear, a
-  /resume) waits for it until Claude Code stops that hook at its own time limit, where before it
-  did not wait at all; and the cleanup of other stored copies after a /clear in that instant
+  /resume) waits for it until that hook's own time limit, then goes on, where before it did not
+  wait at all; the next conversation's first read of its stored list does not wait for it, as
+  before this release; and the cleanup of other stored copies after a /clear in that instant
   waits for it with no bound. Read from the code; not covered by a test.
 - An Edit or Write that takes an old conversation's entries back out waits for the cleanup of the
   other stored copies a second at most, so a stored-copy write that never finishes does not hold

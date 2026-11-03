@@ -36,7 +36,7 @@
   (`tests/review9-scrub.test.tsx`).
 - Leaving the window (/exit, ctrl+c) while the last edit is still being stored no longer drops
   that edit from the stored copy, so a later `claude --resume` lists it: the end waits for that
-  write, a second at most, before Claude Code finishes (`tests/review-end9.test.tsx`, X1;
+  write, a second at most, before Claude Code finishes (`tests/review-end9.test.tsx`, X3 fails before it; X1;
   `tests/review-undo11.test.tsx`, E1, E1b). An edit whose list update lands during that wait
   is waited for too, at an exit and at a /clear, under the same second, and so is one whose tool
   result came in but whose list update has not started (`tests/review-undo13ts.test.tsx`, L1, L2;
@@ -47,7 +47,8 @@
   exit, a /clear and the next save.
 - After a /clear, a stored-copy write that never finishes no longer holds `/agent-undo` and every
   later Edit and Write: the next conversation's first read waits for it a second at most
-  (`tests/review-undo13.test.tsx`, L1). If the write has not landed by then, the stored copy is
+  (`tests/review-undo11.test.tsx`, E1 and E1b fail before it;
+  `tests/review-undo13.test.tsx`, L1). If the write has not landed by then, the stored copy is
   read as it stands and the new edits are stored from then on: each edit's own save waits for
   the one before it a second at most, and once a late write lands the list is saved again, so
   the newest copy is written last (`tests/review-undo16.test.tsx`, N1, N1b); a /clear before it
@@ -86,7 +87,7 @@
   still being read no longer stops the rest of the session's edits from being stored: a read that
   finds its stored entries already listed counts as done, stored entries numbered below every
   listed one are put back in front of them, and one that gives up is tried again at the next
-  read (`tests/review-end9.test.tsx`, X2, X2b, X3).
+  read (`tests/review-end9.test.tsx`, X3 fails before it; X2 and X2b).
 - A /clear while an edit was still being stored no longer writes the new conversation's list as the
   old one's stored copy: the old list is taken when the conversation ends, before the switch, so a
   later `claude --resume` of it lists every edit (`tests/review-undo10.test.tsx`, P1, P1b, P1c; not

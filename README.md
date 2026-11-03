@@ -161,7 +161,9 @@ in each repo or worktree you used it in, delete the file that
 
 - `tool.call` on Edit and Write: passes the call on unchanged, then records
   the hunks from Claude Code's own diff of a call that succeeded, and shows
-  the newest in the status line. Also answers Claude's `undo` tool.
+  the newest in the status line, then waits up to a second for the list's
+  stored copy (timed by Claude Code's own timer). Also answers Claude's
+  `undo` tool.
 - `tool.check` on Bash: when Claude Code allows a command with no question,
   snapshots the git work tree into the private index (`git add -A`,
   `git write-tree`).

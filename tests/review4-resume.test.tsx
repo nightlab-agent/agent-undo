@@ -245,3 +245,42 @@ test('review4 R4 comparison: five stored sessions filling the store, the later s
   await later($, w)
   expect(w.disk.has('changes:n6')).toBe(true)
 })
+
+// --- One step later (judge-a-product pre-critic item 13): the same faults a step on.
+
+test('review4 R2 a step later: two /clears while two restores are in flight, only the newest session is stored', async ($, on) => {
+  const w = world(on, { 'a.txt': 'one\n', 'b.txt': 'x\n', 'c.txt': 'p\n', 'd.txt': 'k\n' })
+  await start($)
+  await edit($, 'a.txt', 'one', 'ONE')
+  await restart($, w)
+  let release1!: () => void
+  w.hold = { key: 'changes:s1', p: new Promise<void>(r => { release1 = r }) }
+  const p1 = edit($, 'b.txt', 'x', 'y')
+  await tick()
+  w.sid = 's2'
+  let release2!: () => void
+  w.hold = { key: 'changes:s2', p: new Promise<void>(r => { release2 = r }) }
+  const p2 = edit($, 'c.txt', 'p', 'q')
+  await tick()
+  w.sid = 's3'
+  await edit($, 'd.txt', 'k', 'K')
+  release2(); release1()
+  await p2; await p1
+  w.files.set(`${ROOT}/d.txt`, 'k\n')
+  await edit($, 'd.txt', 'k', 'K')
+  // The test's state outlives a /clear, so the list keeps the earlier lines; what matters is who writes.
+  expect(files(w, 'changes:s3').filter(f => f === 'd.txt').length).toBe(2)
+  expect(w.disk.has('changes:s2')).toBe(false)
+  expect(files(w, 'changes:s1')).toEqual(['a.txt'])
+})
+
+test('review4 R4 a step later: a copy larger than any one old copy is refused after one eviction, and only one goes', async ($, on) => {
+  const w = world(on, { 'big.txt': 'one\n' }, { limit: true })
+  full(w, 4)
+  w.files.set(`${ROOT}/big.txt`, 'one ' + 'q'.repeat(1_500_000) + '\n')
+  await restart($, w, 'n1')
+  await edit($, 'big.txt', 'one', 'ONE')
+  expect(w.disk.has('changes:n1')).toBe(false)
+  expect(w.disk.has('at:n1')).toBe(false)
+  expect([1, 2, 3, 4].filter(i => w.disk.has(`changes:old${i}`)).length).toBe(3)
+})

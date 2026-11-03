@@ -146,7 +146,7 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
   })
   on('tool.check', () => ({ decision: repo.verdict }) as never)
   // The question: the host raises it inside $.tool.call when the verdict is "ask". The person
-  // acts while it waits (repo.person), then says yes. (From the code review's loop 2.)
+  // acts while it waits (repo.person), then says yes.
   on('classic.PermissionRequest' as never, (async () => {
     if (repo.person) await repo.person(repo.files)
     return { decision: { behavior: 'allow' } }

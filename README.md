@@ -1,8 +1,8 @@
 # agent-undo
 
 Undo one of Claude Code's edits, hunk by hunk (a hunk is one block of changed lines inside an
-edit), and keep your own changes. In a git repo, also one file a shell command of Claude's changed,
-for commands Claude Code ran without asking you.
+edit), and keep your own changes. In a git repo, also one file a shell command or MCP tool call of Claude's changed,
+for the ones Claude Code ran without asking you.
 
 Install at the Claude Code prompt (more under [Install](#install)):
 
@@ -50,7 +50,7 @@ own diff of that edit, and numbers each hunk:
 - NotebookEdit and other built-in tools are not seen. Bash commands are, in a git
   repo (below).
 - MCP tools (`mcp__*`, such as a filesystem server's `write_file`): in a git repo, a call that runs without a permission question and answers without an error is recorded and undone as a Bash command is (in the tests).
-  A call that runs while a Bash command or another MCP call runs is not recorded, and neither is the other one.
+  A call that runs while a Bash command or another MCP call runs is not recorded, and neither is the other one, except for a read-only call (next lines).
   An MCP call that errors or is interrupted is not recorded, so a partial write it made is not undone (a Bash command that fails is recorded).
   A call whose server says the tool is read-only is taken at its word: if it runs during a Bash command and writes anyway, its write is counted as that command's change.
 - Only this session's edits. The list is also kept in the mod's own store

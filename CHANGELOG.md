@@ -23,6 +23,9 @@
   `tests/review-undo11.test.tsx`, E1, E1b). An edit whose list update lands during that wait
   is waited for too, at an exit and at a /clear, under the same second
   (`tests/review-undo13ts.test.tsx`, L1, L2).
+- After a /clear, a stored-copy write that never finishes no longer holds `/agent-undo` and every
+  later Edit and Write: the next conversation's first read waits for it a second at most
+  (`tests/review-undo13.test.tsx`, L1).
 - A /clear and a /resume back (or a /resume to another conversation) while the stored list was
   still being read no longer stops the rest of the session's edits from being stored: a read that
   finds its stored entries already listed counts as done, stored entries numbered below every

@@ -164,8 +164,9 @@ export async function restoreList($: EngineInterface): Promise<void> {
 async function restore($: EngineInterface, id: string): Promise<{ may: boolean; grew: boolean }> {
   const yes = { may: true, grew: false }, no = { may: false, grew: false }
   if ((await read($, listed)) === id) return yes
-  // A save of this id's copy still queued (a /clear and a /resume back in the same window) lands before the read.
-  await saving
+  // A save of this id's copy still queued (a /clear and a /resume back in the same window) lands before the read,
+  // a second at most: this runs in the queue every Edit and Write waits in, so a write that never lands holds none.
+  await saved($, 1000)
   // One more try for a read refused once (the file busy); a second refusal leaves no copy written.
   const got = await $.store.get(keyOf(id)).catch(() => $.store.get(keyOf(id)))
   if (!got || typeof got !== 'object') return yes

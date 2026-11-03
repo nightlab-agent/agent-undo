@@ -5,11 +5,13 @@
 # the changelog's newest release, and package.json (the README carries no version).
 # Exit non-zero on any of them. Run from the repo root: sh tests/release.sh
 # Type-check: tests/typecheck.sh, tsc --noEmit against the engine's declarations.
+# Real git: tests/git-wipe.sh, git commands that throw away uncommitted work, then undone.
 set -e
 cd "$(dirname "$0")/.."
 claude plugin validate .
 claude plugin test .
 sh tests/typecheck.sh
+sh tests/git-wipe.sh
 python3 -I tests/checklist.py
 python3 -I - <<'PY'
 import json, re, sys

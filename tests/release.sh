@@ -10,6 +10,7 @@ set -e
 cd "$(dirname "$0")/.."
 claude plugin validate .
 claude plugin test .
+node --test tests/mcp-writer.test.mjs
 sh tests/typecheck.sh
 sh tests/git-wipe.sh
 python3 -I tests/checklist.py

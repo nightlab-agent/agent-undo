@@ -121,26 +121,7 @@ test('review5 F3 comparison: the same save landing before this one\'s eviction i
   expect(w.disk.has('changes:old2')).toBe(false)
 })
 
-// --- F4 (kind 1/4): a refused read of a copy's time (the "file busy" restore() already retries)
-// counts it as oldest, so the newest other copy is evicted and the oldest kept.
-
-test('review5 F4: one refused read of the newest copy\'s time evicts it instead of the oldest', async ($, on) => {
-  const w = world(on, { 'a.txt': 'one\n' })
-  olds(w, 5)
-  await start($)
-  w.failGet = 'at:old5'
-  w.failGetLeft = 1
-  await edit($, 'a.txt', 'one', 'ONE')
-  expect(oldLeft(w, 5)).toEqual([2, 3, 4, 5])
-})
-
-test('review5 F4 comparison: with no refused read, the oldest copy is the one evicted', async ($, on) => {
-  const w = world(on, { 'a.txt': 'one\n' })
-  olds(w, 5)
-  await start($)
-  await edit($, 'a.txt', 'one', 'ONE')
-  expect(oldLeft(w, 5)).toEqual([2, 3, 4, 5])
-})
+// --- F4: moved to review5-f4.test.tsx (s325).
 
 // --- F5 (the change's own promise, "a stored copy not taken as the list is never overwritten"):
 // a copy under another shape tag (a later version's) is not taken, yet the first edit overwrites it.

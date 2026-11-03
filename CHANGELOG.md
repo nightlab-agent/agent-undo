@@ -9,6 +9,9 @@
   not carry the old entries into its store, and a later resume does not list them
   (`tests/review7-mirror.test.tsx`, `tests/review7-ts-gap.test.tsx`). Such an edit keeps the
   number it was given, as every entry does.
+- After a /clear, a /resume back to the earlier conversation in the same window reads its stored
+  list again: before, the next edit wrote a list of one over the stored one, and its earlier
+  entries were lost (`tests/review8-window.test.tsx`, F4 and F4b).
 
 ## 0.2.1 - 2026-11-03
 - Seen on a screen: two writes by an MCP tool listed, one undone, the other kept (README picture;

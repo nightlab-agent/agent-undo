@@ -1,7 +1,7 @@
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Change, ShellFile } from '../types'
-import { fileKey, inFlight, record, slashed, time, touched, updateList, windows } from './common'
+import { fileKey, forgetRestore, inFlight, record, slashed, time, touched, updateList, windows } from './common'
 
 // The session's list is changed only through common.tsx (updateList), which mirrors it to the store.
 
@@ -305,6 +305,9 @@ export const shellStopped = () => stopped
 export const registerShell = (on: Parameters<Register>[0]) => {
   on('session.end', async ($, e, next) => {
     resetShells()
+    // A /clear or /resume swaps the conversation in this process with no session.start: the next one's
+    // list (an id seen before, too) is read from the store again, never taken for already loaded.
+    forgetRestore()
     // The status line names this conversation's newest change; after a /clear it is not the next one's.
     try { $.ui.status(undefined) } catch {}
     return next(e)

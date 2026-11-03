@@ -2,6 +2,7 @@
 // tool writes is recorded here the way a Bash command is (git snapshots around the call), and its
 // undo is the shell undo. agent-undo's own tool and any non-MCP tool are left alone.
 import { expect, test } from 'claude-code/testing'
+import { isMcp, mcpLabel } from '../hooks/register'
 import { ROOT, bash, repoWorld, start, tick, tool, undo } from './world'
 
 const WRITE = 'mcp__filesystem__write_file'
@@ -106,4 +107,24 @@ test('a change by the person after the MCP call makes its undo refuse and touch 
   repo.files.set(`${ROOT}/a.txt`, 'mine\n')
   expect(await undo($, '1')).toContain('1.1 left as is: a.txt has changed since')
   expect(repo.files.get(`${ROOT}/a.txt`)).toBe('mine\n')
+})
+
+// The test host raises no tool.check for a plugin's own tool, so the test above cannot see a
+// snapshot around it; which names are wrapped is checked here directly.
+test("which tools are wrapped: every mcp__ tool but agent-undo's own; nothing else", async () => {
+  expect(isMcp('mcp__filesystem__write_file')).toBe(true)
+  expect(isMcp('mcp__claude_ai_Claude_Docs__update')).toBe(true)
+  expect(isMcp('mcp__agent-undo__undo')).toBe(false)
+  expect(isMcp('mcp__agent-undo__anything')).toBe(false)
+  expect(isMcp('mcp__agent-undo-fork__undo')).toBe(true)
+  expect(isMcp('Bash')).toBe(false)
+  expect(isMcp('NotebookEdit')).toBe(false)
+  expect(isMcp(undefined)).toBe(false)
+})
+
+test('the label names the server and the tool on one line', async () => {
+  expect(mcpLabel('mcp__filesystem__write_file')).toBe('filesystem write_file')
+  expect(mcpLabel('mcp__srv__a__b')).toBe('srv a__b')
+  expect(mcpLabel('mcp__bad\nname__x')).toBe('bad name x')
+  expect(mcpLabel(`mcp__${'s'.repeat(80)}__x`).length).toBe(60)
 })

@@ -11,7 +11,7 @@ import { registerShell, resetShells, shellStopped, spelled, undoShell } from './
 const changes = atom({ plugin: 'agent-undo', key: 'changes' } as const, [], { shape: 'changes-2' })
 
 export { fileKey } from './common'
-export { filesOf } from './shell'
+export { filesOf, isMcp, mcpLabel } from './shell'
 
 
 

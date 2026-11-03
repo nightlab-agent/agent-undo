@@ -141,7 +141,7 @@ const take = (id: unknown) => {
 /** agent-undo's own model tool (`mcp__<plugin>__<name>`): its undo is not a change to record. */
 const OWN = 'mcp__agent-undo__'
 /** An MCP tool's call, by its wire name, that is not this mod's own. */
-const isMcp = (tool: unknown): tool is string => typeof tool === 'string' && tool.startsWith('mcp__') && !tool.startsWith(OWN)
+export const isMcp = (tool: unknown): tool is string => typeof tool === 'string' && tool.startsWith('mcp__') && !tool.startsWith(OWN)
 /** `mcp__filesystem__write_file` as `filesystem write_file`: one line, at most 60 characters. */
 export const mcpLabel = (tool: string) => {
   const rest = tool.slice('mcp__'.length)

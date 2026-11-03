@@ -1,4 +1,4 @@
-// s350 second review of 46316e3..94496ac, G1 (open): a /clear that lands after restore()'s id check answered the
+// A second review of 46316e3..94496ac found (open): a /clear that lands after restore()'s id check answered the
 // old id and before update() reads the state still lets the old list in. Kept as .txt (not run) until fixed.
 import { expect, test } from 'claude-code/testing'
 import type { TestBody } from 'claude-code/testing'

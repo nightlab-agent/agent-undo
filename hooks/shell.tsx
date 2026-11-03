@@ -1,7 +1,7 @@
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Change, ShellFile } from '../types'
-import { fileKey, inFlight, record, slashed, time, updateList, windows } from './common'
+import { fileKey, inFlight, record, slashed, time, touched, updateList, windows } from './common'
 
 // The session's list is changed only through common.tsx (updateList), which mirrors it to the store.
 
@@ -199,6 +199,8 @@ export async function undoShell($: EngineInterface, c: Change, h: number | undef
       // On the private index: the person's own git may hold the real one's lock.
       const repo = await repoOf($)
       if (!repo) throw new Error('the repo is no longer there')
+      // An open window (a Bash command or MCP call running now) must not take this undo as its change.
+      touched(spelled(c, f.path))
       await onIndex(() => git($, ['restore', `--source=${c.tree}`, '--worktree', '--', `:(literal)${f.path}`], c.top!, repo.env))
       f.undone = true
       undone.push(k)

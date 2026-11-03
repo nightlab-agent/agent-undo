@@ -2,7 +2,7 @@ import { atom, read } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Change, Hunk } from '../types'
-import { editing, forgetRestore, record, restoreList, serial, slashed, snapped, time, updateList } from './common'
+import { editing, forgetRestore, record, restoreList, serial, slashed, snapped, time, touched, updateList } from './common'
 import { ownTool, registerShell, resetShells, shellStopped, spelled, undoShell } from './shell'
 
 // The session's list (the same plugin, key and shape in each file that reads or writes it: the
@@ -178,6 +178,8 @@ async function run($: EngineInterface, args: string): Promise<string> {
     for (const o of hs) if (o !== h && o.line - 1 > got.at) o.line += delta
   }
   if (undone.length > 0) {
+    // An open window (a Bash command or MCP call running now) must not take this undo as its change.
+    touched(c.file)
     await $.fs.write(c.file, text)
     await updateList($, all => all.map(x => x.n !== c.n ? x : {
       ...x, hunks: hs.map((h, k) => (undone.includes(k) ? { ...h, undone: true } : h)),

@@ -69,3 +69,31 @@ test('R2 comparison: a server named agent-undo-fork that writes a file is record
   await tool($, repo, 'mcp__agent-undo-fork__write_file', f => { f.set(`${ROOT}/a.txt`, 'x\n') })
   expect(await undo($, '')).toContain('1.1 changed a.txt')
 })
+
+// R4 (kind 2). The person's /agent-undo while an MCP call runs: the undo's own restore lands in
+// the MCP call's window and is recorded as the MCP call's change.
+test("R4 fail: an undo run while an MCP call runs is not recorded as that call's change", async ($, on) => {
+  const repo = repoWorld(on, { 'a.txt': 'a\n', 'b.txt': 'b\n' })
+  await start($)
+  await bash($, repo, 'one', f => { f.set(`${ROOT}/a.txt`, 'a2\n') })
+  let release = () => {}
+  const held = new Promise<void>(r => { release = r })
+  const call = tool($, repo, 'mcp__filesystem__write_file', async f => { await held; f.set(`${ROOT}/b.txt`, 'b2\n') })
+  await tick()
+  expect(await undo($, '1')).toContain('undid 1.1: a.txt')
+  release()
+  await call
+  const text = await undo($, '')
+  expect(text).toContain('MCP filesystem write_file (1 file)')
+  expect(text).not.toContain('2.1 changed a.txt')
+})
+test('R4 comparison: an undo before the MCP call; the call lists only its own file', async ($, on) => {
+  const repo = repoWorld(on, { 'a.txt': 'a\n', 'b.txt': 'b\n' })
+  await start($)
+  await bash($, repo, 'one', f => { f.set(`${ROOT}/a.txt`, 'a2\n') })
+  expect(await undo($, '1')).toContain('undid 1.1: a.txt')
+  await tool($, repo, 'mcp__filesystem__write_file', f => { f.set(`${ROOT}/b.txt`, 'b2\n') })
+  const text = await undo($, '')
+  expect(text).toContain('MCP filesystem write_file (1 file)')
+  expect(text).not.toContain('2.1 changed a.txt')
+})

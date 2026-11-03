@@ -1,0 +1,37 @@
+name: Bug report
+description: agent-undo put back the wrong thing, missed an edit, or lost its list.
+labels: [bug]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What happened
+      options:
+        - An undo put back the wrong content
+        - An edit is missing from the list
+        - The list was empty or old after /clear or a resume
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      description: What Claude edited (Write, Edit or a shell command), what you typed to undo, and in what order.
+    validations:
+      required: true
+  - type: textarea
+    id: saw
+    attributes:
+      label: What you saw and what you expected
+      description: The list or message agent-undo showed, and the file content before and after, if you have it.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Output of `claude --version`, the agent-undo version, and your OS.
+    validations:
+      required: true

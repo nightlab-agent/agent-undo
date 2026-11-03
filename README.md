@@ -49,7 +49,8 @@ own diff of that edit, and numbers each hunk:
 - A file Claude created is listed, never deleted.
 - NotebookEdit and other built-in tools are not seen. Bash commands are, in a git
   repo (below).
-- MCP tools (`mcp__*`, such as a filesystem server's `write_file`): in a git repo, a call that answers without an error is recorded and undone as a Bash command is (in the tests).
+- MCP tools (`mcp__*`, such as a filesystem server's `write_file`): in a git repo, a call that runs without a permission question and answers without an error is recorded and undone as a Bash command is (in the tests).
+  A call that runs while a Bash command or another MCP call runs is not recorded, and neither is the other one.
   An MCP call that errors or is interrupted is not recorded, so a partial write it made is not undone (a Bash command that fails is recorded).
   A call whose server says the tool is read-only is taken at its word: if it runs during a Bash command and writes anyway, its write is counted as that command's change.
 - Only this session's edits. The list is also kept in the mod's own store
@@ -147,6 +148,8 @@ in each repo or worktree you used it in, delete the file that
   `git write-tree`).
 - `tool.call` on Bash: after the command, a second snapshot; the files that
   differ (`git diff-tree`) are the command's entry.
+- `tool.check` and `tool.call` on every `mcp__*` tool but its own: the same
+  two snapshots around the call, listed as `MCP <server> <tool>`.
 - `session.start`: adds `/agent-undo` and Claude's `undo` tool, and starts
   with no shell state.
 - `session.end`: clears the shell state, so after `/clear` shell commands

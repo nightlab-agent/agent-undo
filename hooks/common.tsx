@@ -85,16 +85,36 @@ async function drop($: EngineInterface, id: string) {
   await $.store.delete(atOf(id))
 }
 
-/** Sets `key`; refused once, the oldest other session's copy goes and it is tried once more. */
+// The store's cap: 4 MiB of JSON text in all (claude-code.d.ts, store.set).
+const CAP = 4 * 1024 * 1024
+
+/** True when the store with `value` under `key` would be over its cap, measured in UTF-8 bytes (never fewer
+ * than its characters, so a full store is never read as having room). */
+async function over($: EngineInterface, key: string, value: unknown): Promise<boolean> {
+  const all: Record<string, unknown> = {}
+  for (const k of await $.store.keys()) if (k !== key) all[k] = await $.store.get(k)
+  all[key] = value
+  return new TextEncoder().encode(JSON.stringify(all)).length > CAP
+}
+
+/** Sets `key`. A refusal is tried once more as it is: store.set also rejects for a busy file, a write the engine
+ * cuts or a mod above that refuses it, and none of those is room to make. Refused twice, the oldest other
+ * session's copy goes only when the store is measured full, and it is tried once more. */
 async function put($: EngineInterface, id: string, key: string, value: unknown) {
   try {
     await $.store.set(key, value)
-  } catch {
-    const oldest = (await copies($)).find(c => c.id !== id)
-    if (!oldest) throw new Error('store full')
-    await drop($, oldest.id)
+    return
+  } catch { /* tried again below */ }
+  try {
     await $.store.set(key, value)
+    return
+  } catch (e) {
+    if (!(await over($, key, value))) throw e
   }
+  const oldest = (await copies($)).find(c => c.id !== id)
+  if (!oldest) throw new Error('store full')
+  await drop($, oldest.id)
+  await $.store.set(key, value)
 }
 
 /** At a /clear or /resume: the ending conversation's list, read in session.end (before the engine's end step

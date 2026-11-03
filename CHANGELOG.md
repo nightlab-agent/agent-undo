@@ -1,6 +1,11 @@
 # Changelog
 
 ## 0.2.2 - 2026-11-03
+- A stored-copy write the store refuses for a reason other than its size (a busy file, a write
+  cut short, a mod above that refuses it) is tried once more as it is, and another conversation's
+  copy is removed to make room only when the store, measured with the new copy, is over its
+  4 MiB. Before, any refusal removed the oldest other conversation's undo list. Not seen on a
+  screen; in the tests, `tests/review-cr6.test.tsx`.
 - A /clear in the instant between the restore's session check and the list's update no longer
   lets the old session's list into the new conversation: the id is asked again after the update,
   and if it changed, exactly the entries taken come out again (in the tests,

@@ -1,8 +1,8 @@
-import { atom, read, update } from 'claude-code'
+import { atom, read } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Change, Hunk } from '../types'
-import { editing, record, serial, slashed, time } from './common'
+import { editing, forgetRestore, record, restoreList, serial, slashed, time, updateList } from './common'
 import { registerShell, resetShells, shellStopped, spelled, undoShell } from './shell'
 
 // The session's list (the same plugin, key and shape in each file that reads or writes it: the
@@ -147,6 +147,7 @@ async function run($: EngineInterface, args: string): Promise<string> {
   const root = slashed(await $.session.root())
   const shown = (f: string) => (slashed(f).startsWith(`${root}/`) ? slashed(f).slice(root.length + 1) : f)
   const arg = args.trim()
+  await restoreList($)
   const list = await read($, changes)
   if (arg === '' || arg === 'list') return listing(list, shown)
   const ref = parseRef(arg)
@@ -176,7 +177,7 @@ async function run($: EngineInterface, args: string): Promise<string> {
   }
   if (undone.length > 0) {
     await $.fs.write(c.file, text)
-    await update($, changes, all => all.map(x => x.n !== c.n ? x : {
+    await updateList($, all => all.map(x => x.n !== c.n ? x : {
       ...x, hunks: hs.map((h, k) => (undone.includes(k) ? { ...h, undone: true } : h)),
     }))
   }
@@ -189,6 +190,7 @@ async function run($: EngineInterface, args: string): Promise<string> {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     resetShells()
+    forgetRestore()
     await $.command.register({
       name: 'agent-undo',
       description: "List Claude's edits in this session, or undo one: /agent-undo 3.1 (one hunk) or /agent-undo 3",

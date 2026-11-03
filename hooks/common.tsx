@@ -50,8 +50,44 @@ async function save($: EngineInterface) {
   }
 }
 
+// Restored once per session id in this process: at the first read or change after a start.
+let restoring: { id: string; done: Promise<void> } | undefined
+
+/** A start (a new process, or new code) looks in the store again at the first read. */
+export const forgetRestore = () => { restoring = undefined }
+
+/**
+ * An empty list takes this session's stored copy, if the store holds one under the same shape
+ * tag. Restored entries are only listed: an undo still checks each file reads as the change left it.
+ */
+export async function restoreList($: EngineInterface): Promise<void> {
+  try {
+    const id = await $.session.id()
+    if (!restoring || restoring.id !== id) restoring = { id, done: restore($, id).catch(() => undefined) }
+    await restoring.done
+  } catch {
+    // No session id or no store: the list is this process's only.
+  }
+}
+
+async function restore($: EngineInterface, id: string) {
+  const got = await $.store.get(keyOf(id))
+  if (!got || typeof got !== 'object') return
+  const { shape, list } = got as { shape?: unknown; list?: unknown }
+  if (shape !== SHAPE || !Array.isArray(list)) return
+  const ok = (list as unknown[]).filter((c): c is Change => {
+    if (!c || typeof c !== 'object') return false
+    const x = c as Partial<Change>
+    if (typeof x.n !== 'number' || typeof x.file !== 'string' || typeof x.at !== 'string' || !Array.isArray(x.hunks)) return false
+    const lines = x.hunks.reduce((s, h) => s + (h?.before?.length ?? 0) + (h?.after?.length ?? 0), 0)
+    return lines <= MAX_LINES && (x.files?.length ?? 0) <= MAX_FILES
+  }).slice(-MAX_CHANGES)
+  if (ok.length > 0) await update($, changes, now => (now.length === 0 ? ok : now))
+}
+
 /** Changes the session's list, then mirrors it to the store. */
 export async function updateList($: EngineInterface, f: (list: readonly Change[]) => Change[]) {
+  await restoreList($)
   await update($, changes, f)
   await mirror($)
 }

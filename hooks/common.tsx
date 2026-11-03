@@ -74,6 +74,7 @@ async function put($: EngineInterface, id: string, key: string, value: unknown) 
  * after the saves already queued. */
 export async function mirrorEnding($: EngineInterface, id: string): Promise<void> {
   if (restored !== id) return
+  ended = id
   const ending = { id, list: await read($, changes) }
   // A conversation with no edits has nothing to keep; its empty copy would count toward KEEP and evict a real one.
   if (ending.list.length === 0) return
@@ -94,11 +95,13 @@ export async function saved($: EngineInterface, ms: number, signal?: AbortSignal
 async function save($: EngineInterface, ending?: { id: string; list: Change[] }) {
   const id = ending?.id ?? await $.session.id()
   // Until this session's stored copy was read, writing would put a shorter list over it.
-  if (!ending && restored !== id) return
+  if (!ending && restored !== id && id !== ended) return
   const list = ending?.list ?? await read($, changes)
   // A /clear or /resume during that read (forgetRestore) left the next conversation's list there: the
-  // ending one's copy is mirrorEnding's, queued after this, so this writes nothing.
-  if (!ending && restored !== id) return
+  // ending one's copy is mirrorEnding's, queued after this, so this writes nothing. An edit of the ending
+  // conversation whose list update landed after mirrorEnding's read still writes while `listed` (swapped
+  // with the state) names it: read after the list, a swap between the two reads refuses.
+  if (!ending && restored !== id && !(id === ended && (await read($, listed)) === id)) return
   try {
     await put($, id, atOf(id), Date.now())
     await put($, id, keyOf(id), { shape: SHAPE, list })
@@ -115,6 +118,8 @@ let restoring: { id: string; done: Promise<void> } | undefined
 // The session id whose stored copy was read (or found absent) and is now the list, so saving it
 // writes nothing shorter; a failed read is tried again.
 let restored: string | undefined
+// The id mirrorEnding was last called for: its late saves may still write (see save()).
+let ended: string | undefined
 
 /** A start (a new process, or new code) looks in the store again at the first read. */
 export const forgetRestore = () => { restoring = undefined; restored = undefined }

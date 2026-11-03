@@ -30,18 +30,26 @@ let saving: Promise<unknown> = Promise.resolve()
 const settled = new WeakSet<Promise<unknown>>([saving])
 
 // An edit's save waits for the one before it a second at most (restore's bound), so a write that never lands
-// holds neither the later saves nor the Edit and Write hooks that wait for them. The ending conversation's copy
-// and scrub() keep the whole wait: past it, a late write of theirs would land over a newer list. A save already
-// done costs no timer; a refused sleep waits as before.
+// holds neither the later saves nor the Edit and Write hooks that wait for them. A write passed by is kept in
+// `passed` until it lands: the ending conversation's copy and scrub() wait for those too, so a late write of
+// theirs never lands over a newer list. A save already done costs no timer; a refused sleep waits as before.
+const passed = new Set<Promise<unknown>>()
 function after($: EngineInterface, prev: Promise<unknown>): Promise<unknown> {
   if (settled.has(prev)) return prev
   const late = Symbol('late')
-  return Promise.race([prev, $.clock.sleep(1000).then(() => late, () => prev)]).then(got => {
+  const stop = new AbortController()
+  return Promise.race([prev, $.clock.sleep(1000, { signal: stop.signal }).then(() => late, () => prev)]).then(got => {
+    stop.abort()
     // Passed by: once it lands, the list is saved again, so the newest copy is written last.
-    if (got === late) void prev.then(() => mirror($))
+    if (got === late) {
+      passed.add(prev)
+      void prev.then(() => { passed.delete(prev); return mirror($) })
+    }
   })
 }
 const enqueue = (p: Promise<unknown>) => { saving = p; void p.then(() => settled.add(p)); return p }
+// The queue and every write it passed by.
+const whole = () => Promise.all([saving, ...passed])
 
 /** Writes the session's list to the store as it stands now; a failure only leaves no copy. */
 export function mirror($: EngineInterface): Promise<void> {
@@ -91,7 +99,7 @@ export async function mirrorEnding($: EngineInterface, id: string): Promise<void
   const ending = { id, list: await read($, changes) }
   // A conversation with no edits has nothing to keep; its empty copy would count toward KEEP and evict a real one.
   if (ending.list.length === 0) return
-  enqueue(saving.then(() => save($, ending)).catch(() => undefined))
+  enqueue(whole().then(() => save($, ending)).catch(() => undefined))
 }
 
 /** Waits for the queued saves, at most `ms` (the engine's own example saves in session.end before its end step);
@@ -249,7 +257,7 @@ const entryKey = (c: Change) => `${c.n}|${c.at}|${c.file}`
 /** Takes `keys` out of every stored copy but `owner`'s, in the save queue. A read refused twice, or a
  * write refused, drops that copy: no copy rather than one that lists another conversation's edits. */
 function scrub($: EngineInterface, owner: string, keys: Set<string>): Promise<void> {
-  const p = saving.then(async () => {
+  const p = whole().then(async () => {
     for (const { id } of await copies($)) {
       if (id === owner) continue
       try {

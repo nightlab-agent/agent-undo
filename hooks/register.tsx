@@ -6,7 +6,7 @@ import { editing, forgetRestore, record, restoreList, serial, slashed, time, upd
 import { registerShell, resetShells, shellStopped, spelled, undoShell } from './shell'
 
 // The session's list (the same plugin, key and shape in each file that reads or writes it: the
-// engine's scan lists a module's state per file). Change the tag in all three when a Change's
+// engine's scan lists a module's state per file). Change the tag in both (and SHAPE in common.tsx) when a Change's
 // fields change: it declines what an earlier version stored.
 const changes = atom({ plugin: 'agent-undo', key: 'changes' } as const, [], { shape: 'changes-2' })
 

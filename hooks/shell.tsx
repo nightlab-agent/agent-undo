@@ -1,13 +1,9 @@
-import { atom, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Change, ShellFile } from '../types'
-import { fileKey, inFlight, record, slashed, time, windows } from './common'
+import { fileKey, inFlight, record, slashed, time, updateList, windows } from './common'
 
-// The session's list (the same plugin, key and shape in each file that reads or writes it: the
-// engine's scan lists a module's state per file). Change the tag in all three when a Change's
-// fields change: it declines what an earlier version stored.
-const changes = atom({ plugin: 'agent-undo', key: 'changes' } as const, [], { shape: 'changes-2' })
+// The session's list is changed only through common.tsx (updateList), which mirrors it to the store.
 
 const INDEX = 'agent-undo.index'
 const ZERO = /^0+$/
@@ -182,7 +178,7 @@ export async function undoShell($: EngineInterface, c: Change, h: number | undef
     }
   }
   if (undone.length > 0) {
-    await update($, changes, all => all.map(x => (x.n !== c.n ? x : { ...x, files })))
+    await updateList($, all => all.map(x => (x.n !== c.n ? x : { ...x, files })))
   }
   const did = undone.length > 0
     ? `undid ${undone.map(k => `${c.n}.${k + 1}`).join(', ')}: ${undone.map(k => shown(spelled(c, files[k]!.path))).join(', ')}`

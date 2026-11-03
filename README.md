@@ -168,7 +168,8 @@ in each repo or worktree you used it in, delete the file that
   snapshots the git work tree into the private index (`git add -A`,
   `git write-tree`).
 - `tool.call` on Bash: after the command, a second snapshot; the files that
-  differ (`git diff-tree`) are the command's entry.
+  differ (`git diff-tree`) are the command's entry, stored with the same
+  wait as an edit.
 - `tool.check` and `tool.call` on every `mcp__*` tool but its own: the same
   two snapshots around the call, listed as `MCP <server> <tool>`.
 - `session.start`: adds `/agent-undo` and Claude's `undo` tool, and starts

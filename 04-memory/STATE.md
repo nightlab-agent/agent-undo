@@ -9,4 +9,4 @@
 
 The stored list keeps each conversation's copy right across a /clear, a /resume back and an exit, with a
 one-second bound on each wait for a stored write where Claude Code's timer answers (CHANGELOG 0.2.2 has the cases and the known limit).
-294 plugin tests pass. Not yet seen on a screen: the list after a resume, and an MCP call in a real session.
+301 plugin tests pass. Not yet seen on a screen: the list after a resume, and an MCP call in a real session.

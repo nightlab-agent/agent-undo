@@ -172,7 +172,8 @@ in each repo or worktree you used it in, delete the file that
 - `session.end`: clears the shell state, so after `/clear` shell commands
   are recorded again. At a `/clear` or `/resume` it also stores the ending
   conversation's list, and before any end it waits up to a second for the
-  last edit's copy to be stored.
+  last edit's copy to be stored (timed by Claude Code's own timer; CHANGELOG 0.2.2
+  says what happens when another mod refuses it).
 - `command.run`: answers `/agent-undo`: the list, or the outcome of one undo.
 
 ## Install

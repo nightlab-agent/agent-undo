@@ -7,8 +7,6 @@ import type { TestBody } from 'claude-code/testing'
 // H1: updateList's own one-second wait gives up on its write p without putting p in
 // `passed`, so the next save's after(p) waits a full second on the same p again; with a hung store every Edit
 // after the first costs two seconds, not "a second at most" (CHANGELOG).
-// H2 (kind 4): a refused sleep makes the new wait `.catch(() => p)`, the unbounded wait the PR removes; saved()
-// in the same file ends at once in that case.
 type On = Parameters<TestBody>[1]
 type $T = Parameters<TestBody>[0]
 const ROOT = '/proj'

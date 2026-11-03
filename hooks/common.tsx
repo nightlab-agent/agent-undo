@@ -22,7 +22,8 @@ const listed = atom({ plugin: 'agent-undo', key: 'listed' } as const, '', { shap
 // A copy of the list in the plugin's store, `changes:<session id>` = { shape, list }, so a new
 // process for the same session finds it (`$.state` does not outlive the process). Each copy has its
 // own write time, `at:<session id>`, written first; there is no shared index to lose an entry from.
-// The KEEP newest are kept; when the store refuses a copy (4 MiB in all), the oldest other one goes.
+// The KEEP newest are kept; when the store refuses a copy twice and is measured full (4 MiB in all), the
+// oldest other one goes.
 const KEEP = 5
 const keyOf = (id: string) => `changes:${id}`
 const atOf = (id: string) => `at:${id}`
@@ -85,21 +86,23 @@ async function drop($: EngineInterface, id: string) {
   await $.store.delete(atOf(id))
 }
 
-// The store's cap: 4 MiB of JSON text in all (claude-code.d.ts, store.set).
+// The store's cap: 4 MiB of JSON text in all (claude-code.d.ts, store.set). The engine counts it in characters
+// of the whole store as compact JSON, not in bytes, so text with accents or CJK fits as many characters.
 const CAP = 4 * 1024 * 1024
 
-/** True when the store with `value` under `key` would be over its cap, measured in UTF-8 bytes (never fewer
- * than its characters, so a full store is never read as having room). */
+/** True when the store with `value` under `key` would be over its cap, counted as the engine counts it: the
+ * characters of the whole store as compact JSON. */
 async function over($: EngineInterface, key: string, value: unknown): Promise<boolean> {
   const all: Record<string, unknown> = {}
   for (const k of await $.store.keys()) if (k !== key) all[k] = await $.store.get(k)
   all[key] = value
-  return new TextEncoder().encode(JSON.stringify(all)).length > CAP
+  return JSON.stringify(all).length > CAP
 }
 
-/** Sets `key`. A refusal is tried once more as it is: store.set also rejects for a busy file, a write the engine
- * cuts or a mod above that refuses it, and none of those is room to make. Refused twice, the oldest other
- * session's copy goes only when the store is measured full, and it is tried once more. */
+/** Sets `key`. A refusal is tried once more as it is: claude-code.d.ts names three refusals for store.set (a
+ * function, a cycle, the 4 MiB cap), and a refusal it does not name (a mod above that refuses it, a file the
+ * system holds) is not room to make either. Refused twice, the oldest other session's copy goes only when the
+ * store is measured full, and it is tried once more. */
 async function put($: EngineInterface, id: string, key: string, value: unknown) {
   try {
     await $.store.set(key, value)
@@ -177,7 +180,8 @@ async function save($: EngineInterface, ending?: { id: string; list: Change[] })
     await put($, id, atOf(id), Date.now())
     await put($, id, keyOf(id), { shape: SHAPE, list })
   } catch {
-    // Too large for the store even with room made: no copy rather than a stale one.
+    // Refused twice and not room to make (a busy file), or too large even with room made: no copy rather than a
+    // stale one; the next save writes it again.
     await drop($, id)
     return
   }

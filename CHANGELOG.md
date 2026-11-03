@@ -4,8 +4,10 @@
 - A stored-copy write the store refuses for a reason other than its size (a busy file, a write
   cut short, a mod above that refuses it) is tried once more as it is, and another conversation's
   copy is removed to make room only when the store, measured with the new copy, is over its
-  4 MiB. Before, any refusal removed the oldest other conversation's undo list. Not seen on a
-  screen; in the tests, `tests/review-cr6.test.tsx`.
+  4 MiB, counted in characters as Claude Code counts it (so accented or CJK text is not read as
+  full early). Before, any refusal removed the oldest other conversation's undo list. Not seen on
+  a screen; in the tests, `tests/review-cr6.test.tsx` (P1) and `tests/review-cr7.test.tsx` (Q1:
+  refused twice, under the cap, the other copy stays; at the cap, it goes).
 - A /clear in the instant between the restore's session check and the list's update no longer
   lets the old session's list into the new conversation: the id is asked again after the update,
   and if it changed, exactly the entries taken come out again (in the tests,
@@ -51,8 +53,12 @@
   `tests/review-undo17.test.tsx` X1 and `tests/review-undo18.test.tsx` Y1 show the two waits;
   `tests/review-undo16.test.tsx` N1 the later edits). A bound there would let that write land last,
   over the newer copy.
-- Each "a second at most" in this release is timed by Claude Code's own timer; where another mod refuses that
-  timer, these waits are as they were before this release.
+- Each "a second at most" in this release is timed by Claude Code's own timer. Where another mod
+  refuses that timer: an undo and an Edit or Write wait for a stored-copy write that never
+  finishes with no bound, as before this release; the end of a conversation (an exit, a /clear, a
+  /resume) waits for it until Claude Code stops that hook at its own time limit, where before it
+  did not wait at all; and the cleanup of other stored copies after a /clear in that instant
+  waits for it with no bound. Read from the code; not covered by a test.
 - An Edit or Write that takes an old conversation's entries back out waits for the cleanup of the
   other stored copies a second at most, so a stored-copy write that never finishes does not hold
   that edit, and it is listed (`tests/review-cr-whole.test.tsx`, Z1). With that write stuck, the

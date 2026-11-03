@@ -35,8 +35,9 @@
   limit: a write that lands later still is written over, so edits only it carried leave the undo
   list (their files keep them) (`tests/review-undo14.test.tsx`, R2;
   `tests/review-undo15.test.tsx`, S1, S2). A second known limit: a write the store never finishes
-  is waited for with no bound by the ending conversation's copy and by the cleanup of other stored
-  copies, so neither is written in that process (later edits are still saved, each after a second;
+  is waited for with no bound by every ending conversation's copy and every cleanup of other stored
+  copies from then on, so none of them is written in that process (later edits are still saved, the
+  first after a second and the rest at once;
   `tests/review-undo17.test.tsx` X1 and `tests/review-undo18.test.tsx` Y1 show the two waits;
   `tests/review-undo16.test.tsx` N1 the later edits). A bound there would let that write land last,
   over the newer copy.

@@ -16,6 +16,8 @@ export { filesOf, isMcp, mcpLabel } from './shell'
 
 
 type Patch = { newStart: number; lines: string[] }[]
+/** The fields of an Edit or Write result read here, typed whether or not the engine's tool results are declared. */
+type FileOut = { filePath: string; structuredPatch?: Patch; staged?: unknown; type?: string; originalFile?: string | null }
 
 /** Each hunk of an engine diff as the lines before and after it, context included. */
 export const hunksOf = (patch: Patch): Hunk[] =>
@@ -211,8 +213,8 @@ export const register: Register = on => {
   on('tool.call', { tool: 'Edit' }, async ($, e, next) => {
     const done = await editing((e as { file_path?: unknown }).file_path, () => serial(() => next(e)))
     try {
-      if (done.deny !== undefined || done.isError || !done.result || done.result.staged) return done
-      const out = done.result
+      const out = done.deny === undefined && !done.isError ? (done.result as FileOut | undefined) : undefined
+      if (!out || out.staged) return done
       const hunks = hunksOf(out.structuredPatch ?? [])
       await record($, {
         at: new Date().toISOString(), tool: 'Edit', file: out.filePath, agent: e.agentId,
@@ -227,8 +229,8 @@ export const register: Register = on => {
   on('tool.call', { tool: 'Write' }, async ($, e, next) => {
     const done = await editing((e as { file_path?: unknown }).file_path, () => serial(() => next(e)))
     try {
-      if (done.deny !== undefined || done.isError || !done.result || done.result.staged) return done
-      const out = done.result
+      const out = done.deny === undefined && !done.isError ? (done.result as FileOut | undefined) : undefined
+      if (!out || out.staged) return done
       const created = out.type === 'create'
       const hunks = created ? [] : hunksOf(out.structuredPatch ?? [])
       await record($, {

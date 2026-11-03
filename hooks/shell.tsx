@@ -307,7 +307,8 @@ export const registerShell = (on: Parameters<Register>[0]) => {
     resetShells()
     // A /clear or /resume swaps the conversation in this process with no session.start: the next one's
     // list (an id seen before, too) is read from the store again, never taken for already loaded.
-    forgetRestore()
+    // An exit (or logout) keeps it: the last edit's copy may still be on its way to the store.
+    if (e.reason === 'clear' || e.reason === 'resume') forgetRestore()
     // The status line names this conversation's newest change; after a /clear it is not the next one's.
     try { $.ui.status(undefined) } catch {}
     return next(e)

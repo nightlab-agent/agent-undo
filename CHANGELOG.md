@@ -17,6 +17,8 @@
   copy loses them too, so a second /clear in that instant leaves none behind (F1, F1b, F2).
   A copy that cannot be read twice, or written, is dropped rather than kept with them
   (`tests/review9-scrub.test.tsx`).
+- Leaving the window (/exit, ctrl+c) while the last edit is still being stored no longer drops
+  that edit from the stored copy, so a later `claude --resume` lists it (`tests/review-end9.test.tsx`, X1).
 
 ## 0.2.1 - 2026-11-03
 - Seen on a screen: two writes by an MCP tool listed, one undone, the other kept (README picture;

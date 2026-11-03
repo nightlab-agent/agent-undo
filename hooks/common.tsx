@@ -106,10 +106,14 @@ export async function restoreList($: EngineInterface): Promise<void> {
         id,
         // A restore that settles after a newer one began (/clear: a new id, same process) is not this session's.
         done: restore($, id).then(
-          async may => {
-            if (restoring !== mine || !may) return
+          async got => {
+            if (restoring !== mine) return
+            // A give-up is not kept: the next read or change looks again (the list may be cleaned by then).
+            if (!got.may) { restoring = undefined; return }
             restored = id
             await update($, listed, () => id)
+            // Stored entries went in before ones already listed: the copy is written with both.
+            if (got.grew) await mirror($)
           },
           () => { if (restoring === mine) restoring = undefined },
         ),
@@ -122,14 +126,16 @@ export async function restoreList($: EngineInterface): Promise<void> {
   }
 }
 
-/** True when this process may write the session's copy: none was stored, or it is now the list. */
-async function restore($: EngineInterface, id: string): Promise<boolean> {
-  if ((await read($, listed)) === id) return true
+/** `may`: this process may write the session's copy (none was stored, or all of it is now in the list);
+ * `grew`: stored entries went in before entries already listed, so the copy lacks those. */
+async function restore($: EngineInterface, id: string): Promise<{ may: boolean; grew: boolean }> {
+  const yes = { may: true, grew: false }, no = { may: false, grew: false }
+  if ((await read($, listed)) === id) return yes
   // One more try for a read refused once (the file busy); a second refusal leaves no copy written.
   const got = await $.store.get(keyOf(id)).catch(() => $.store.get(keyOf(id)))
-  if (!got || typeof got !== 'object') return true
+  if (!got || typeof got !== 'object') return yes
   const { shape, list } = got as { shape?: unknown; list?: unknown }
-  if (shape !== SHAPE || !Array.isArray(list)) return true
+  if (shape !== SHAPE || !Array.isArray(list)) return yes
   const ok = (list as unknown[]).filter((c): c is Change => {
     if (!c || typeof c !== 'object') return false
     const x = c as Partial<Change>
@@ -137,28 +143,39 @@ async function restore($: EngineInterface, id: string): Promise<boolean> {
     const lines = x.hunks.reduce((s, h) => s + (h?.before?.length ?? 0) + (h?.after?.length ?? 0), 0)
     return lines <= MAX_LINES && (x.files?.length ?? 0) <= MAX_FILES
   }).slice(-MAX_CHANGES)
-  if (ok.length === 0) return true
+  if (ok.length === 0) return yes
   // Edits listed while the store refused its reads keep their numbers (the user may have seen them),
-  // so the stored copy is not merged in; nor is it written over: it outlives this process.
+  // so a stored entry is merged in only when it is numbered below every listed one; otherwise the
+  // copy is not written over either: it outlives this process.
   // A /clear while the store was read (a new id, the same process, no session.start) makes this copy
   // another conversation's: it is not taken.
-  if ((await $.session.id()) !== id) return false
-  let took = false
+  if ((await $.session.id()) !== id) return no
+  // An entry is known by its number, time and file: an undo marks a hunk undone, and the entry is
+  // still the one stored.
+  let added: Change[] = [], had = false
   // update() may call its function more than once, so each call decides afresh.
-  await update($, changes, now => (now.length === 0 ? (took = true, ok) : (took = false, now)))
-  if (!took) return false
+  await update($, changes, now => {
+    added = []; had = false
+    if (now.length === 0) return (added = ok, ok)
+    const listedKeys = new Set(now.map(entryKey))
+    const missing = ok.filter(c => !listedKeys.has(entryKey(c)))
+    // An earlier restore of this session in this process (one a /clear and /resume overtook) filled it.
+    if (missing.length === 0) return (had = true, now)
+    const low = Math.min(...now.map(c => c.n))
+    return missing.every(c => c.n < low) ? (added = missing, [...missing, ...now]) : now
+  })
+  if (had) return (await $.session.id()) === id ? yes : no
+  if (added.length === 0) return no
   // A /clear between that check and the write put the copy into the new conversation's list:
   // asked again, the id says so, and exactly the entries taken come out (its own edits stay).
-  if ((await $.session.id()) === id) return true
-  // An entry is known by its number, time and file: an undo in the gap marks a hunk undone, and the
-  // entry is still the one taken.
-  const mine = new Set(ok.map(entryKey))
+  if ((await $.session.id()) === id) return { may: true, grew: added !== ok }
+  const mine = new Set(added.map(entryKey))
   await update($, changes, now => now.filter(c => !mine.has(entryKey(c))))
   // The new conversation's edits in that gap mirrored the copy into its store, and a second /clear
   // may have come since: every other session's stored copy loses the taken entries.
   await scrub($, id, mine)
   await mirror($)
-  return false
+  return no
 }
 
 const entryKey = (c: Change) => `${c.n}|${c.at}|${c.file}`

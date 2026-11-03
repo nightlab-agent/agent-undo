@@ -19,6 +19,11 @@
   (`tests/review9-scrub.test.tsx`).
 - Leaving the window (/exit, ctrl+c) while the last edit is still being stored no longer drops
   that edit from the stored copy, so a later `claude --resume` lists it (`tests/review-end9.test.tsx`, X1).
+- A /clear and a /resume back (or a /resume to another conversation) while the stored list was
+  still being read no longer stops the rest of the session's edits from being stored: a read that
+  finds its stored entries already listed counts as done, stored entries numbered below every
+  listed one are put back in front of them, and one that gives up is tried again at the next
+  read (X2, X2b, X3).
 
 ## 0.2.1 - 2026-11-03
 - Seen on a screen: two writes by an MCP tool listed, one undone, the other kept (README picture;

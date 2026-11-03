@@ -84,12 +84,12 @@ export async function mirrorEnding($: EngineInterface, id: string): Promise<void
 /** Waits for the queued saves, at most `ms` (the engine's own example saves in session.end before its end step). */
 export async function saved($: EngineInterface, ms: number, signal?: AbortSignal): Promise<void> {
   if (!(ms > 0) || signal?.aborted) return
-  // Ends at the bound or at the chain's abort. A mod's only timers are $.clock's (no setTimeout in its
-  // environment), so a sleep refused for another reason (a mod above denies it) leaves the abort to end it:
-  // the hook's own budget, not this second, is then the cap.
+  // Ends at the bound or at the chain's abort. The engine's declarations type no timer but $.clock's (and a hot
+  // reload cancels only those), so a sleep refused for another reason (a mod above denies it) leaves the abort
+  // to end it, the hook's own budget then the cap; with no signal to wait for, the wait ends at once.
   const bound = new Promise<void>(done => {
     signal?.addEventListener('abort', () => done(), { once: true })
-    if (Number.isFinite(ms)) $.clock.sleep(ms, { signal }).then(done, () => { if (signal?.aborted) done() })
+    if (Number.isFinite(ms)) $.clock.sleep(ms, { signal }).then(done, () => { if (!signal || signal.aborted) done() })
   })
   // A save queued during the wait (an edit landing while the conversation ends) replaces `saving`: wait until
   // the queue stands still, under the same bound.

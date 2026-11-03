@@ -168,7 +168,7 @@ const exitWithStuckWrite = async ($: $T, w: W) => {
   const out = await Promise.race([end($, w, 'prompt_input_exit').then(() => 'ended'), new Promise(r => setTimeout(() => r('still waiting'), 3000))])
   return { out, ms: Date.now() - t0 }
 }
-// Not a test: a mod has no timer of its own to fall back on (hooks/common.tsx, saved()); with the clock refused,
+// Not a test: the declarations type no timer to fall back on (hooks/common.tsx, saved()); with the clock refused,
 // the hook's budget ends the wait. The comparison below holds the one-second bound where the clock answers.
 test('review-undo13 C1 comparison: with a clock.sleep hook, the same exit reaches the end step within about a second', async ($, on) => {
   const w = world(on, all)

@@ -2,7 +2,7 @@ import { atom, read } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Change, Hunk } from '../types'
-import { editing, forgetRestore, record, restoreList, serial, slashed, snapped, time, updateList } from './common'
+import { editing, forgetRestore, record, restoreList, serial, showNewest, slashed, snapped, time, updateList } from './common'
 import { ownTool, registerShell, resetShells, shellStopped, spelled, undoShell } from './shell'
 
 // The session's list (the same plugin, key and shape in each file that reads or writes it: the
@@ -210,6 +210,8 @@ export const register: Register = on => {
       isDeferred: false,
     })
     ownTool((reg as { tool?: unknown } | undefined)?.tool)
+    // After a resume the status line names the newest stored change; the start never waits on the store.
+    void restoreList($).then(() => showNewest($)).catch(() => {})
     return next(e)
   })
 

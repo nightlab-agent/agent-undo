@@ -111,9 +111,10 @@ test('review4 R1: after two refused reads the store recovers, and the next edit 
   await start($)
   await edit($, 'a.txt', 'one', 'ONE')
   await edit($, 'b.txt', 'x', 'y')
-  await restart($, w)
+  // The start's own restore tries twice, then the first edit's: four refused reads cover both.
   w.failGet = 'changes:s1'
-  w.failGetLeft = 2
+  w.failGetLeft = 4
+  await restart($, w)
   await edit($, 'c.txt', 'p', 'q')
   await edit($, 'd.txt', 'k', 'K')
   // Not merged (c and d were listed as #1 and #2), and the stored a and b are never written over.
@@ -125,9 +126,9 @@ test('review4 R1 comparison: one refused read (the retry succeeds), all four edi
   await start($)
   await edit($, 'a.txt', 'one', 'ONE')
   await edit($, 'b.txt', 'x', 'y')
-  await restart($, w)
   w.failGet = 'changes:s1'
   w.failGetLeft = 1
+  await restart($, w)
   await edit($, 'c.txt', 'p', 'q')
   await edit($, 'd.txt', 'k', 'K')
   expect(files(w, 'changes:s1')).toEqual(['a.txt', 'b.txt', 'c.txt', 'd.txt'])
@@ -252,9 +253,9 @@ test('review4 R2 a step later: two /clears while two restores are in flight, onl
   const w = world(on, { 'a.txt': 'one\n', 'b.txt': 'x\n', 'c.txt': 'p\n', 'd.txt': 'k\n' })
   await start($)
   await edit($, 'a.txt', 'one', 'ONE')
-  await restart($, w)
   let release1!: () => void
   w.hold = { key: 'changes:s1', p: new Promise<void>(r => { release1 = r }) }
+  await restart($, w)
   const p1 = edit($, 'b.txt', 'x', 'y')
   await tick()
   w.sid = 's2'

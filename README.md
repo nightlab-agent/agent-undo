@@ -61,9 +61,9 @@ own diff of that edit, and numbers each hunk:
   session id finds the list again; the tests show this. Claude Code's docs
   imply a plain `claude --resume` reuses the session id: `--fork-session`
   is described as making "a new session ID instead of reusing the
-  original" (code.claude.com/docs/en/cli-reference). The list
-  coming back after a resume has not been seen on a screen yet; a new
-  session, in a preview (2026-11-02), starts with an empty list.
+  original" (code.claude.com/docs/en/cli-reference). Seen on a screen
+  (Claude Code 2.1.312, 2026-11-02): after a resume, the undo tool listed
+  the edit made before it; a new session starts with an empty list.
 - Nothing leaves your machine through this mod: it makes no network calls
   (it runs `git` and, once per repo, `cp` on your machine).
   When Claude uses its undo tool, the list goes to Claude like any other tool

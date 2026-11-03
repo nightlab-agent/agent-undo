@@ -113,9 +113,10 @@ test('a store read that keeps failing never writes a shorter list over the store
   await start($)
   await edit($, 'a.txt', 'one', 'ONE')
   await edit($, 'b.txt', 'x', 'y')
-  await restart($, w)
+  // The start's own restore tries twice, then the first edit's: four refused reads cover both.
   w.failGet = 'changes:s1'
-  w.failGetLeft = 2
+  w.failGetLeft = 4
+  await restart($, w)
   await edit($, 'c.txt', 'p', 'q')
   const kept = w.disk.get('changes:s1') as { list: { file: string }[] }
   expect(kept.list.map(c => c.file.split('/').pop())).toEqual(['a.txt', 'b.txt'])

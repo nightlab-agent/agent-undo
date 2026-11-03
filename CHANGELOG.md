@@ -26,7 +26,9 @@
   the 5 sessions written most recently are kept; a copy saved by an older version, whose list has other fields, is ignored.
   Claude Code's docs imply a plain `claude --resume` reuses the session id (`--fork-session`
   makes "a new session ID instead of reusing the original", code.claude.com/docs/en/cli-reference); the list coming back
-  after a resume is not yet seen on a screen. A new session, in a preview, starts empty.
+  after a resume was seen on a screen (2.1.312, 2026-11-02). A new session, in a preview, starts empty.
+- After a resume the status line names the newest stored change at once (it stayed blank until
+  the next change, seen on that screen). The start does not wait for the store.
 - When the store is full and an older session's copy must go, a write time that could not be read
   is tried once more, and a copy whose time still cannot be read is kept, not evicted (in the tests).
 - The stored copy: a read refused once is tried again, and no copy is written until the stored

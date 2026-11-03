@@ -34,12 +34,13 @@ const host = (on: On) => {
 
 const world = (on: On, files0: Record<string, string>) => {
   const files = new Map(Object.entries(files0).map(([k, v]) => [`${ROOT}/${k}`, v]))
-  const w = Object.assign(host(on), { files })
+  const statuses: string[] = []
+  const w = Object.assign(host(on), { files, statuses })
   on('session.root', () => ({ value: ROOT }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('command.register', () => ({ value: { command: 'agent-undo' } }))
   on('tool.register', () => ({ value: undefined }) as never)
-  on('ui.status', () => ({ value: undefined }) as never)
+  on('ui.status', (_, e) => { statuses.push(String(e.text)); return { value: undefined } as never })
   on('fs.exists', (_, e) => ({ value: files.has(e.path) }))
   on('fs.read', (_, e) => {
     const t = files.get(e.path)
@@ -159,4 +160,25 @@ test('a Bash command restored in a new process undoes, and stays marked undone i
   expect(repo.files.get(`${ROOT}/a.txt`)).toBe('a\n')
   await restart($, w)
   expect(await undo($, '')).toContain('1.1 changed a.txt  (undone)')
+})
+
+test('a new process for the same session shows the newest edit in the status line at once', async ($, on) => {
+  const w = world(on, { 'a.txt': 'one\ntwo\n', 'b.txt': 'x\n' })
+  await start($)
+  await edit($, 'a.txt', 'two', 'TWO')
+  await edit($, 'b.txt', 'x', 'y')
+  w.statuses.length = 0
+  await restart($, w)
+  await new Promise(r => setTimeout(r, 0))
+  expect(w.statuses.some(t => t.includes('#2 b.txt (1 hunk) · /agent-undo'))).toBe(true)
+})
+
+test('comparison: a new process under another session id shows no edit in the status line', async ($, on) => {
+  const w = world(on, { 'a.txt': 'one\ntwo\n' })
+  await start($)
+  await edit($, 'a.txt', 'two', 'TWO')
+  w.statuses.length = 0
+  await restart($, w, 's2')
+  await new Promise(r => setTimeout(r, 0))
+  expect(w.statuses.some(t => t.includes('/agent-undo'))).toBe(false)
 })

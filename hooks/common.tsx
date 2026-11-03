@@ -207,6 +207,11 @@ export async function record($: EngineInterface, c: Omit<Change, 'n'>) {
     const n = list.reduce((m, x) => Math.max(m, x.n), 0) + 1
     return [...list, { ...kept, n }].slice(-MAX_CHANGES)
   })
+  await showNewest($)
+}
+
+/** The status line names the session's newest change (also after a resume, from the restored list). */
+export async function showNewest($: EngineInterface) {
   const all = await read($, changes)
   const last = all[all.length - 1]
   if (last && snapped(last)) $.ui.status(`#${last.n} ${last.tool === 'MCP' ? `MCP ${last.file}` : 'Bash'} (${last.files?.length ?? 0} file${last.files?.length === 1 ? '' : 's'}) · /agent-undo`)

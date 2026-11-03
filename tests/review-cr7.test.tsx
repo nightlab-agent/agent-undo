@@ -5,7 +5,7 @@ import type { TestBody } from 'claude-code/testing'
 // Q1 (kinds 3, 4): the engine measures its cap in characters: its store backend refuses a set when
 // `JSON.stringify({...store, [key]: value}).length > 4194304` ("the store would be N characters, over the 4194304
 // limit", claude 2.1.312 binary: the message is a template there, `would be ${l} characters`, so a grep for
-// the whole sentence or the number finds nothing; the plugin test kit's store gives the same refusal). over() measures UTF-8 bytes, so a store of non-ASCII text (an accented or CJK file
+// the whole sentence finds nothing, the constant is `uSe=4194304`; the plugin test kit's store gives the same refusal). over() measures UTF-8 bytes, so a store of non-ASCII text (an accented or CJK file
 // in the undo lists) that is 3 MiB of characters reads as over 4 MiB, and a busy file refused twice evicts another
 // conversation's copy, the case 0.2.2 says no longer happens. The world below enforces the engine's rule.
 type On = Parameters<TestBody>[1]

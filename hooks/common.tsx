@@ -10,7 +10,7 @@ const MAX_FILES = 200
 // refused list update loses the edit with no word: the list stays under it with room to spare.
 const MAX_CHARS = 4_000_000
 
-/** The newest MAX_CHANGES entries, then the oldest dropped until the list's JSON fits under MAX_CHARS. */
+/** The newest MAX_CHANGES entries, then the oldest dropped until the list's JSON fits under MAX_CHARS or one entry remains. */
 function fit(list: Change[]): Change[] {
   let out = list.slice(-MAX_CHANGES)
   let size = JSON.stringify(out).length

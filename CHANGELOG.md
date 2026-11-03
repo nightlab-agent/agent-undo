@@ -15,6 +15,8 @@
 - When the old entries are taken back out, they are found by number, time and file, so an undo
   of one in that instant does not keep it in the new list; and every other conversation's stored
   copy loses them too, so a second /clear in that instant leaves none behind (F1, F1b, F2).
+  A copy that cannot be read twice, or written, is dropped rather than kept with them
+  (`tests/review9-scrub.test.tsx`).
 
 ## 0.2.1 - 2026-11-03
 - Seen on a screen: two writes by an MCP tool listed, one undone, the other kept (README picture;

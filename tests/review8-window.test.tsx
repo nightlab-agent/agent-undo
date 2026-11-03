@@ -178,7 +178,7 @@ test('review-undo7 F1b comparison: no second /clear, s2 resumed lists only its o
 
 // F2 (kind 3, the comparison key): in the window the new conversation sees the old list and undoes #2.
 // The undo marks the hunk undone, so the entry's JSON no longer equals the taken one and the rollback
-// (common.tsx: `mine.has(JSON.stringify(c))`) keeps it: s2 lists and stores the old conversation's b.txt.
+// (common.tsx: `mine.has(entryKey(c))`) keeps it: s2 lists and stores the old conversation's b.txt.
 const undoInWindow = async ($: $T, w: W, inside: boolean) => {
   const open = await openGap($, w)
   if (!inside) { open(); await tick(); await tick() }

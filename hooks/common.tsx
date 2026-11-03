@@ -163,18 +163,22 @@ async function restore($: EngineInterface, id: string): Promise<boolean> {
 
 const entryKey = (c: Change) => `${c.n}|${c.at}|${c.file}`
 
-/** Takes `keys` out of every stored copy but `owner`'s, in the save queue; a failure leaves that copy. */
+/** Takes `keys` out of every stored copy but `owner`'s, in the save queue. A read refused twice, or a
+ * write refused, drops that copy: no copy rather than one that lists another conversation's edits. */
 function scrub($: EngineInterface, owner: string, keys: Set<string>): Promise<void> {
   const p = saving.then(async () => {
     for (const { id } of await copies($)) {
       if (id === owner) continue
       try {
-        const got = await $.store.get(keyOf(id))
+        const got = await $.store.get(keyOf(id)).catch(() => $.store.get(keyOf(id)))
         const list = (got as { shape?: unknown; list?: unknown } | undefined)?.list
         if ((got as { shape?: unknown } | undefined)?.shape !== SHAPE || !Array.isArray(list)) continue
-        const kept = (list as Change[]).filter(c => !keys.has(entryKey(c)))
+        // An element that is not an object is no entry restore() would take: it goes too.
+        const kept = (list as unknown[]).filter(c => !!c && typeof c === 'object' && !keys.has(entryKey(c as Change)))
         if (kept.length !== list.length) await $.store.set(keyOf(id), { shape: SHAPE, list: kept })
-      } catch {}
+      } catch {
+        await drop($, id).catch(() => undefined)
+      }
     }
   }).catch(() => undefined)
   saving = p

@@ -14,7 +14,8 @@
   entries were lost (`tests/review8-window.test.tsx`, F4 and F4b).
 - When the old entries are taken back out, they are found by number, time and file, so an undo
   of one in that instant does not keep it in the new list; and every other conversation's stored
-  copy loses them too, so a second /clear in that instant leaves none behind (F1, F1b, F2).
+  copy loses them too, so a second /clear in that instant leaves none behind
+  (`tests/review8-window.test.tsx`, F1, F1b, F2).
   A copy that cannot be read twice, or written, is dropped rather than kept with them
   (`tests/review9-scrub.test.tsx`).
 - Leaving the window (/exit, ctrl+c) while the last edit is still being stored no longer drops
@@ -62,7 +63,7 @@
   still being read no longer stops the rest of the session's edits from being stored: a read that
   finds its stored entries already listed counts as done, stored entries numbered below every
   listed one are put back in front of them, and one that gives up is tried again at the next
-  read (X2, X2b, X3).
+  read (`tests/review-end9.test.tsx`, X2, X2b, X3).
 - A /clear while an edit was still being stored no longer writes the new conversation's list as the
   old one's stored copy: the old list is taken when the conversation ends, before the switch, so a
   later `claude --resume` of it lists every edit (`tests/review-undo10.test.tsx`, P1, P1b, P1c; not

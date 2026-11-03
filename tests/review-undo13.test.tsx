@@ -177,7 +177,7 @@ test('review-undo13 C1 comparison: with a clock.sleep hook, the same exit reache
   expect(r.ms).toBeLessThan(2000)
 })
 
-// L1 (kind 2, a wait on the whole queue inside the undo queue): restore() now awaits `saving` (common.tsx:165, 07c0415),
+// L1 (kind 2, a wait on the whole queue inside the undo queue): restore() now awaits `saving` (through saved() in common.tsx, 07c0415),
 // and run() calls restoreList inside serial() (register.tsx:152), the queue every Edit and Write also waits in. A store
 // write that does not settle (the exit bound does not apply to a /clear's process, which goes on) holds the list command,
 // and every later Edit or Write behind it.

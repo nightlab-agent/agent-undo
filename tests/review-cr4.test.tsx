@@ -159,7 +159,7 @@ test('review-cr4 R1 comparison: every save lands at once, the same gap, /clear a
 // at most". restore() waits a second for scrub() (after() in restore()), then its mirror() runs after() on
 // `saving`, which is that same scrub(), and waits a second more. With restore()'s own one-second read wait
 // (saved($, 1000)) the hook is held about 3 s, not 2. A bounded wait that gave up must not be re-run by the
-// next caller (house-style, the s407 lesson).
+// next caller.
 const stuckThenGap = async ($: $T, w: W, lands: number | undefined) => {
   await start($); await settle()
   const h = hold(); w.holdStoreSet = { key: 'changes:s1', ...h }

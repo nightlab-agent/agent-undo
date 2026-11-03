@@ -120,26 +120,26 @@ const neverLands = async ($: $T, w: W, lands: number | undefined) => {
   void ea
   return bDone
 }
-test('review-s418 N1: s1\'s copy write never lands, /clear to s2, two edits and an exit: s2\'s copy holds b.txt and c.txt', { timeoutMs: 9000 }, async ($, on) => {
+test('review-undo16 N1: s1\'s copy write never lands, /clear to s2, two edits and an exit: s2\'s copy holds b.txt and c.txt', { timeoutMs: 9000 }, async ($, on) => {
   const w = world(on, all)
   const bDone = await neverLands($, w, undefined)
   expect(w.files.get('/proj/c.txt')).toBe('K\n')
   expect(w.files.get('/proj/b.txt')).toBe('y\n')
   expect(files(w, 'changes:s2')).toEqual(['b.txt', 'c.txt'])
 })
-test('review-s418 N1 comparison: the same write lands at 1.5 s, s2\'s copy holds b.txt and c.txt', { timeoutMs: 9000 }, async ($, on) => {
+test('review-undo16 N1 comparison: the same write lands at 1.5 s, s2\'s copy holds b.txt and c.txt', { timeoutMs: 9000 }, async ($, on) => {
   const w = world(on, all)
   await neverLands($, w, 1500)
   expect(files(w, 'changes:s2')).toEqual(['b.txt', 'c.txt'])
 })
-test('review-s418 N1 probe: s1\'s copy write never lands, s2\'s first Edit hook returns to the engine', { timeoutMs: 9000 }, async ($, on) => {
+test('review-undo16 N1 probe: s1\'s copy write never lands, s2\'s first Edit hook returns to the engine', { timeoutMs: 9000 }, async ($, on) => {
   const w = world(on, all)
   expect(await neverLands($, w, undefined)).toBe('returned')
 })
 
 // N1b (kind 1, out of order): with the bound, c's save no longer waits for b's held write of the same copy; when that
 // write lands at 1.3 s it must not leave the older [a, b] as the copy.
-test('review-s419 N1b: b\'s copy write lands at 1.3 s, c saved meanwhile: the copy ends holding a, b and c', { timeoutMs: 9000 }, async ($, on) => {
+test('review-undo16 N1b: b\'s copy write lands at 1.3 s, c saved meanwhile: the copy ends holding a, b and c', { timeoutMs: 9000 }, async ($, on) => {
   const w = world(on, all)
   await start($); await settle()
   await edit($, 'a.txt', 'one', 'ONE'); await settle()
@@ -150,7 +150,7 @@ test('review-s419 N1b: b\'s copy write lands at 1.3 s, c saved meanwhile: the co
   await eb; await ec; await new Promise(r => setTimeout(r, 300)); await settle(); await settle()
   expect(files(w, 'changes:s1')).toEqual(['a.txt', 'b.txt', 'c.txt'])
 })
-test('review-s419 N1b comparison: b\'s write lands at 0.3 s: the copy holds a, b and c', { timeoutMs: 9000 }, async ($, on) => {
+test('review-undo16 N1b comparison: b\'s write lands at 0.3 s: the copy holds a, b and c', { timeoutMs: 9000 }, async ($, on) => {
   const w = world(on, all)
   await start($); await settle()
   await edit($, 'a.txt', 'one', 'ONE'); await settle()

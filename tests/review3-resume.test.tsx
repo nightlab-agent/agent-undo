@@ -136,28 +136,9 @@ test('review3 F1 comparison: no failed read, the earlier edits are still listed 
 
 // --- Another process (another terminal, another session) writes the same store mid-save.
 
-test('review3 F2: a save by another process between this one\'s read of `sessions` and its key sweep is deleted', async ($, on) => {
-  const w = world(on, { 'a.txt': 'one\n' })
-  await start($)
-  // Process 2, session s2, finishes its whole save while process 1 is inside its own.
-  w.onSessionsGet = () => {
-    w.disk.set('changes:s2', stored('b.txt', 1, 1))
-    w.disk.set('sessions', ['s2', 's1'])
-  }
-  await edit($, 'a.txt', 'one', 'ONE')
-  expect(w.disk.get('sessions')).toContain('s2')
-  expect(w.disk.has('changes:s2')).toBe(true)
-})
-
-test('review3 F2 comparison: the same save by another process landing before this one\'s save is kept', async ($, on) => {
-  const w = world(on, { 'a.txt': 'one\n' })
-  await start($)
-  w.disk.set('changes:s2', stored('b.txt', 1, 1))
-  w.disk.set('sessions', ['s2'])
-  await edit($, 'a.txt', 'one', 'ONE')
-  expect(w.disk.get('sessions')).toContain('s2')
-  expect(w.disk.has('changes:s2')).toBe(true)
-})
+// review3 F2 and its comparison read the shared `sessions` index, which is gone (each copy now has its
+// own write time); the same race, another process saving in the middle of this one's save, is
+// review4 R3 and its comparison.
 
 // --- The store's 4 MiB in all: a full store with five sessions never makes room for a sixth.
 

@@ -17,10 +17,12 @@ const changes = atom({ plugin: 'agent-undo', key: 'changes' } as const, [], { sh
 const SHAPE = 'changes-2'
 
 // A copy of the list in the plugin's store, `changes:<session id>` = { shape, list }, so a new
-// process for the same session finds it (`$.state` does not outlive the process). `sessions` names
-// the stored ones, the most recently written last; only the last KEEP are kept.
+// process for the same session finds it (`$.state` does not outlive the process). Each copy has its
+// own write time, `at:<session id>`, written first; there is no shared index to lose an entry from.
+// The KEEP newest are kept; when the store refuses a copy (4 MiB in all), the oldest other one goes.
 const KEEP = 5
 const keyOf = (id: string) => `changes:${id}`
+const atOf = (id: string) => `at:${id}`
 let saving: Promise<unknown> = Promise.resolve()
 
 /** Writes the session's list to the store as it stands now; a failure only leaves no copy. */
@@ -30,35 +32,52 @@ export function mirror($: EngineInterface): Promise<void> {
   return p
 }
 
+/** Every stored session id with its write time, oldest first (a copy with no time counts as oldest). */
+async function copies($: EngineInterface): Promise<{ id: string; at: number }[]> {
+  const ids = new Set<string>()
+  for (const k of await $.store.keys()) {
+    const m = /^(?:changes|at):(.+)$/.exec(k)
+    if (m) ids.add(m[1]!)
+  }
+  const out: { id: string; at: number }[] = []
+  for (const id of ids) {
+    const at = await $.store.get(atOf(id)).catch(() => undefined)
+    out.push({ id, at: typeof at === 'number' ? at : 0 })
+  }
+  return out.sort((a, b) => a.at - b.at)
+}
+
+async function drop($: EngineInterface, id: string) {
+  await $.store.delete(keyOf(id))
+  await $.store.delete(atOf(id))
+}
+
+/** Sets `key`; refused once, the oldest other session's copy goes and it is tried once more. */
+async function put($: EngineInterface, id: string, key: string, value: unknown) {
+  try {
+    await $.store.set(key, value)
+  } catch {
+    const oldest = (await copies($)).find(c => c.id !== id)
+    if (!oldest) throw new Error('store full')
+    await drop($, oldest.id)
+    await $.store.set(key, value)
+  }
+}
+
 async function save($: EngineInterface) {
   const id = await $.session.id()
   // Until this session's stored copy was read, writing would put a shorter list over it.
   if (restored !== id) return
   const list = await read($, changes)
-  const was = await $.store.get('sessions')
-  const ids = (Array.isArray(was) ? was.filter((x): x is string => typeof x === 'string') : []).filter(x => x !== id)
-  ids.push(id)
-  // Older sessions go first, so the store has room for this one's copy. Only ids this index
-  // named are cleared: a key it does not name may be another process's save in progress.
-  const evicted = ids.slice(0, -KEEP)
-  for (const x of evicted) await $.store.delete(keyOf(x))
-  let mine = true
   try {
-    await $.store.set(keyOf(id), { shape: SHAPE, list })
+    await put($, id, atOf(id), Date.now())
+    await put($, id, keyOf(id), { shape: SHAPE, list })
   } catch {
-    // Too large for the store: no copy rather than a stale one.
-    await $.store.delete(keyOf(id))
-    mine = false
+    // Too large for the store even with room made: no copy rather than a stale one.
+    await drop($, id)
+    return
   }
-  // Read the index again just before writing it, keeping what another process added meanwhile.
-  const fresh = await $.store.get('sessions')
-  const others = [...(Array.isArray(fresh) ? fresh : []), ...ids]
-    .filter((x): x is string => typeof x === 'string' && x !== id && !evicted.includes(x))
-  const all = [...new Set(others)]
-  if (mine) all.push(id)
-  const kept = all.slice(-KEEP)
-  for (const x of all.slice(0, -KEEP)) await $.store.delete(keyOf(x))
-  if (JSON.stringify(fresh) !== JSON.stringify(kept)) await $.store.set('sessions', kept)
+  for (const c of (await copies($)).filter(c => c.id !== id).slice(0, -(KEEP - 1))) await drop($, c.id)
 }
 
 // Restored once per session id in this process: at the first read or change after a start.

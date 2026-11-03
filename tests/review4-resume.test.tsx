@@ -25,6 +25,8 @@ const world = (on: On, files0: Record<string, string>, o: Opts = {}) => {
     hold: undefined as { key: string; p: Promise<void> } | undefined,
     sessionsGets: 0,
     onSessionsGetAt: undefined as { n: number; f: () => void } | undefined,
+    sets: 0,
+    onSetAt: undefined as { n: number; f: () => void } | undefined,
   }
   const at = (e: { plugin: string; key: string; id?: string }) => `${e.plugin}/${e.key}/${e.id ?? ''}`
   on('session.id', () => ({ value: w.sid }))
@@ -46,6 +48,7 @@ const world = (on: On, files0: Record<string, string>, o: Opts = {}) => {
     return { value: v } as never
   })
   on('store.set', (_, e) => {
+    if (++w.sets === w.onSetAt?.n) { const f = w.onSetAt.f; w.onSetAt = undefined; f() }
     if (o.limit) {
       const next = new Map(disk)
       next.set(e.key, e.value)
@@ -161,29 +164,30 @@ test('review4 R2 comparison: /clear after the old restore settled, the new sessi
   expect(files(w, 'changes:s2')).toContain('d.txt')
 })
 
-// --- R3 (kind 2): another process's whole save lands between this one's second read of `sessions`
-// (the reread) and its write of it. Its id is dropped from the index, and with the unnamed-key sweep
-// gone, its copy stays in the store for good.
+// --- R3 (kind 2): another process's whole save lands in the middle of this one's (at its first or
+// second store write). On the shared `sessions` index its id was dropped and its copy never cleared;
+// with no index, a copy is found by its key and aged by its own write time (`at:<id>`).
 
 const race = async ($: $T, w: W, at: number) => {
   await start($)
-  w.onSessionsGetAt = { n: at, f: () => {
+  w.onSetAt = { n: at, f: () => {
+    w.disk.set('at:s2', Date.now())
     w.disk.set('changes:s2', stored('b.txt', 1, 1))
-    w.disk.set('sessions', [...((w.disk.get('sessions') as string[] | undefined) ?? []), 's2'])
   } }
   await edit($, 'a.txt', 'one', 'ONE')
 }
 
-test('review4 R3: another process saving between the reread of `sessions` and its write loses its index entry', async ($, on) => {
+test('review4 R3: another process saving at this one\'s second store write keeps its copy', async ($, on) => {
   const w = world(on, { 'a.txt': 'one\n' })
   await race($, w, 2)
-  expect(w.disk.get('sessions')).toContain('s2')
+  expect(files(w, 'changes:s2')).toEqual(['b.txt'])
+  expect(files(w, 'changes:s1')).toEqual(['a.txt'])
 })
 
-test('review4 R3 comparison: the same save landing at the first read of `sessions` keeps its index entry', async ($, on) => {
+test('review4 R3 comparison: the same save landing at this one\'s first store write keeps its copy', async ($, on) => {
   const w = world(on, { 'a.txt': 'one\n' })
   await race($, w, 1)
-  expect(w.disk.get('sessions')).toContain('s2')
+  expect(files(w, 'changes:s2')).toEqual(['b.txt'])
 })
 
 const cycle = async ($: $T, w: W) => {

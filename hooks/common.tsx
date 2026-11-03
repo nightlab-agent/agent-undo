@@ -35,21 +35,22 @@ async function save($: EngineInterface) {
   // Until this session's stored copy was read, writing would put a shorter list over it.
   if (restored !== id) return
   const list = await read($, changes)
+  const was = await $.store.get('sessions')
+  const ids = (Array.isArray(was) ? was.filter((x): x is string => typeof x === 'string') : []).filter(x => x !== id)
+  ids.push(id)
+  let kept = ids.slice(-KEEP)
+  // Older sessions go first, so the store has room for this one's copy.
+  for (const k of await $.store.keys()) {
+    if (k.startsWith('changes:') && !kept.some(x => keyOf(x) === k)) await $.store.delete(k)
+  }
   try {
     await $.store.set(keyOf(id), { shape: SHAPE, list })
   } catch {
     // Too large for the store: no copy rather than a stale one.
     await $.store.delete(keyOf(id))
-    return
+    kept = kept.filter(x => x !== id)
   }
-  const was = await $.store.get('sessions')
-  const ids = (Array.isArray(was) ? was.filter((x): x is string => typeof x === 'string') : []).filter(x => x !== id)
-  ids.push(id)
-  const kept = ids.slice(-KEEP)
   if (was === undefined || JSON.stringify(was) !== JSON.stringify(kept)) await $.store.set('sessions', kept)
-  for (const k of await $.store.keys()) {
-    if (k.startsWith('changes:') && !kept.some(x => keyOf(x) === k)) await $.store.delete(k)
-  }
 }
 
 // Restored once per session id in this process: at the first read or change after a start.

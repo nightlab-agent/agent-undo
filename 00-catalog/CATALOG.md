@@ -14,6 +14,9 @@
 | `tests/release.sh` | The release check. |
 | `tests/bash.test.tsx` | Tests of the Bash record. |
 | `tests/mcp.test.tsx` | Tests of the MCP tool record (the Bash record's snapshots around an `mcp__*` call). |
+| `tests/mcp-writer.test.mjs` | Tests of the preview's MCP server (node --test, run by the release check). |
+| `preview/mcp-writer.js` | A small MCP server (one write_file tool) for the screen preview only; not published. |
+| `docs/preview-mcp.png` | The screen picture of two MCP writes listed and one undone. |
 | `tests/review-bash.test.tsx`, `tests/review2-*.tsx`, `tests/words-code.test.tsx` | The 0.2.0 reviews' findings as tests, each beside a passing comparison. |
 | `tests/review-*.test.tsx`, `tests/review[345]-*.test.tsx`, `tests/review5-later.test.txt` | Cases found by code reviews, each beside its nearest normal case; the .txt holds later cases not yet run. |
 | `tests/resume.test.tsx` | The list across a new process: kept in the store per session id, restored, bounded, declined under another tag. |

@@ -38,19 +38,27 @@ async function save($: EngineInterface) {
   const was = await $.store.get('sessions')
   const ids = (Array.isArray(was) ? was.filter((x): x is string => typeof x === 'string') : []).filter(x => x !== id)
   ids.push(id)
-  let kept = ids.slice(-KEEP)
-  // Older sessions go first, so the store has room for this one's copy.
-  for (const k of await $.store.keys()) {
-    if (k.startsWith('changes:') && !kept.some(x => keyOf(x) === k)) await $.store.delete(k)
-  }
+  // Older sessions go first, so the store has room for this one's copy. Only ids this index
+  // named are cleared: a key it does not name may be another process's save in progress.
+  const evicted = ids.slice(0, -KEEP)
+  for (const x of evicted) await $.store.delete(keyOf(x))
+  let mine = true
   try {
     await $.store.set(keyOf(id), { shape: SHAPE, list })
   } catch {
     // Too large for the store: no copy rather than a stale one.
     await $.store.delete(keyOf(id))
-    kept = kept.filter(x => x !== id)
+    mine = false
   }
-  if (was === undefined || JSON.stringify(was) !== JSON.stringify(kept)) await $.store.set('sessions', kept)
+  // Read the index again just before writing it, keeping what another process added meanwhile.
+  const fresh = await $.store.get('sessions')
+  const others = [...(Array.isArray(fresh) ? fresh : []), ...ids]
+    .filter((x): x is string => typeof x === 'string' && x !== id && !evicted.includes(x))
+  const all = [...new Set(others)]
+  if (mine) all.push(id)
+  const kept = all.slice(-KEEP)
+  for (const x of all.slice(0, -KEEP)) await $.store.delete(keyOf(x))
+  if (JSON.stringify(fresh) !== JSON.stringify(kept)) await $.store.set('sessions', kept)
 }
 
 // Restored once per session id in this process: at the first read or change after a start.

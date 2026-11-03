@@ -1,7 +1,9 @@
 # agent-undo
 
-Undo one of Claude Code's edits, hunk by hunk (a hunk is one block of changed lines inside an
-edit), and keep your own changes. In a git repo, also one file a shell command or MCP tool call of Claude's changed,
+When Claude Code edits on its own, `/rewind` can only put all the code back to an
+earlier prompt, and taking back one bad change by hand means picking it out from your own.
+This plugin undoes one of Claude Code's edits, hunk by hunk (a hunk is one block of changed
+lines inside an edit), and keeps your own changes. In a git repo, it also undoes one file that a shell command or MCP tool call of Claude's changed,
 for the ones Claude Code ran without asking you.
 
 Install at the Claude Code prompt (more under [Install](#install)):

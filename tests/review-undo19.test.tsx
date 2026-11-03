@@ -104,7 +104,7 @@ const poison = async ($: $T, w: W) => {
   expect(files(w, 'changes:s1')).toEqual(['a.txt', 'b.txt'])
   expect(files(w, 'changes:s2')).toEqual(['c.txt'])
 }
-test('review-undo19 Z1: an ending copy passed by while it waits is waited for by itself; the next /clear\'s ending copy is never written and d\'s late write lands over e', { timeoutMs: 20000 }, async ($, on) => {
+test('review-undo19 Z1: an ending copy passed by never waits for itself; the next /clear\'s copy holds c, d and e', { timeoutMs: 20000 }, async ($, on) => {
   const w = world(on, all)
   await poison($, w)
   await endWhilePassed($, w, 's2', 1500)

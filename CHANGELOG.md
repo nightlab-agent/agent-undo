@@ -41,14 +41,11 @@
   `tests/review-undo17.test.tsx` X1 and `tests/review-undo18.test.tsx` Y1 show the two waits;
   `tests/review-undo16.test.tsx` N1 the later edits). A bound there would let that write land last,
   over the newer copy.
-- A conversation's copy that a later save passed by no longer waits for itself, so the next /clear's
-  copy is written (`tests/review-undo19.test.tsx`, Z1).
 - An Edit or Write that takes an old conversation's entries back out waits for the cleanup of the
-  other stored copies a second at most, so a stored-copy write that never finishes no longer holds
+  other stored copies a second at most, so a stored-copy write that never finishes does not hold
   that edit, and it is listed (`tests/review-cr-whole.test.tsx`, Z1). With that write stuck, the
   edit waits about two seconds in all: one for its read of the stored copy and one for the
-  cleanup, which is not waited for a second time (under 2.5 s in `tests/review-cr4.test.tsx`, R2;
-  about 3 s before). The
+  cleanup, which is not waited for a second time (under 2.5 s in `tests/review-cr4.test.tsx`, R2). The
   cleanup itself still runs once that write lands, and the list is saved again after it. A /resume
   back to a conversation whose stored copy that cleanup has not yet cleaned waits for it under its
   read's one second, so the old entries are not listed again if it lands within that second

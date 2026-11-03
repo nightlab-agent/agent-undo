@@ -18,7 +18,7 @@
 | `preview/mcp-writer.js` | A small MCP server (one write_file tool) for the screen preview only; not published. |
 | `docs/preview-mcp.png` | The screen picture of two MCP writes listed and one undone. |
 | `tests/review-bash.test.tsx`, `tests/review2-*.tsx`, `tests/words-code.test.tsx` | The 0.2.0 reviews' findings as tests, each beside a passing comparison. |
-| `tests/review-*.test.tsx`, `tests/review[34567]-*.test.tsx`, `tests/review5-later.test.txt` | Cases found by code reviews, each beside its nearest normal case; the .txt holds later cases not yet run. |
+| `tests/review-*.test.tsx`, `tests/review[3-9]-*.test.tsx`, `tests/review5-later.test.txt` | Cases found by code reviews, each beside its nearest normal case; the .txt holds later cases not yet run. |
 | `tests/resume.test.tsx` | The list across a new process: kept in the store per session id, restored, bounded, declined under another tag. |
 | `tests/world.tsx` | The test world for the Bash record: an in-memory repo, a strict fake git, the permission question. |
 | `tests/git-snapshot.sh` | The Bash record's git commands on a real scratch repo. |

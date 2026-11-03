@@ -80,6 +80,17 @@ export async function mirrorEnding($: EngineInterface, id: string): Promise<void
   saving = saving.then(() => save($, ending)).catch(() => undefined)
 }
 
+/** Waits for the queued saves, at most `ms` (the engine's own example saves in session.end before its end step). */
+export async function saved($: EngineInterface, ms: number, signal?: AbortSignal): Promise<void> {
+  if (!(ms > 0) || signal?.aborted) return
+  // Ends at the bound or at the chain's abort; a sleep refused for any other reason leaves the abort to end it.
+  const bound = new Promise<void>(done => {
+    signal?.addEventListener('abort', () => done(), { once: true })
+    if (Number.isFinite(ms)) $.clock.sleep(ms, { signal }).then(done, () => { if (signal?.aborted) done() })
+  })
+  await Promise.race([saving, bound])
+}
+
 async function save($: EngineInterface, ending?: { id: string; list: Change[] }) {
   const id = ending?.id ?? await $.session.id()
   // Until this session's stored copy was read, writing would put a shorter list over it.

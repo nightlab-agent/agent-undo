@@ -18,7 +18,9 @@
   A copy that cannot be read twice, or written, is dropped rather than kept with them
   (`tests/review9-scrub.test.tsx`).
 - Leaving the window (/exit, ctrl+c) while the last edit is still being stored no longer drops
-  that edit from the stored copy, so a later `claude --resume` lists it (`tests/review-end9.test.tsx`, X1).
+  that edit from the stored copy, so a later `claude --resume` lists it: the end waits for that
+  write, a second at most, before Claude Code finishes (`tests/review-end9.test.tsx`, X1;
+  `tests/review-undo11.test.tsx`, E1, E1b).
 - A /clear and a /resume back (or a /resume to another conversation) while the stored list was
   still being read no longer stops the rest of the session's edits from being stored: a read that
   finds its stored entries already listed counts as done, stored entries numbered below every

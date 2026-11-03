@@ -21,6 +21,8 @@ const world = (on: On, files0: Record<string, string>) => {
     seenAtEnd: [] as string[][],
   }
   const at = (e: { plugin: string; key: string; id?: string }) => `${e.plugin}/${e.key}/${e.id ?? ''}`
+  // The engine's clock: a real wait (the test kit answers none), so session.end's bounded wait for a held save ends.
+  on('clock.sleep', (_, e) => new Promise(r => setTimeout(() => r({ value: undefined }), e.ms)) as never)
   on('session.id', async () => ({ value: w.sid }))
   on('state.get', async (_, e) => ({ value: w.state.get(at(e)) ?? { value: undefined, version: 0 } }) as never)
   on('state.set', (_, e) => {
@@ -165,4 +167,17 @@ test('review-undo11 V1c comparison: one new process left by /exit with no edit w
   const w = world(on, { 'a.txt': 'one\n' })
   await freshStartsThenLeave($, w, 1, 'prompt_input_exit')
   expect([...w.disk.keys()].filter(k => k.endsWith(':s2'))).toEqual([])
+})
+test('review-undo11 E1b: an exit while a copy\'s write never lands still reaches the end step, within about a second', async ($, on) => {
+  const w = world(on, { 'a.txt': 'one\n' })
+  await start($); await settle()
+  let reached!: () => void
+  const at = new Promise<void>(r => { reached = r })
+  w.holdStoreSet = { key: 'changes:s1', reached, p: new Promise<void>(() => {}) }
+  void edit($, 'a.txt', 'one', 'ONE')
+  await at
+  const t0 = Date.now()
+  await end($, w, 'prompt_input_exit')
+  expect(w.seenAtEnd.length).toBe(1)
+  expect(Date.now() - t0).toBeLessThan(2000)
 })

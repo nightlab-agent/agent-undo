@@ -28,6 +28,8 @@ const world = (on: On, files0: Record<string, string>) => {
     getHeld: undefined as undefined | { reached: () => void; p: Promise<void> },
   }
   const at = (e: { plugin: string; key: string; id?: string }) => `${e.plugin}/${e.key}/${e.id ?? ''}`
+  // The engine's clock: a real wait (the test kit answers none), so session.end's bounded wait for a held save ends.
+  on('clock.sleep', (_, e) => new Promise(r => setTimeout(() => r({ value: undefined }), e.ms)) as never)
   on('session.id', async () => {
     w.ids++
     if (w.idHeld) { const h = w.idHeld; w.idHeld = undefined; h.reached(); await h.p }

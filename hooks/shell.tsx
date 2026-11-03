@@ -1,7 +1,7 @@
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Change, ShellFile } from '../types'
-import { fileKey, forgetRestore, inFlight, mirrorEnding, record, slashed, time, touched, updateList, windows } from './common'
+import { fileKey, forgetRestore, inFlight, mirrorEnding, record, saved, slashed, time, touched, updateList, windows } from './common'
 
 // The session's list is changed only through common.tsx (updateList), which mirrors it to the store.
 
@@ -312,6 +312,8 @@ export const registerShell = (on: Parameters<Register>[0]) => {
       try { await mirrorEnding($, e.sessionId) } catch {}
       forgetRestore()
     }
+    // The last edit's copy (and the ending list's) lands before the end step, within the chain's short bound.
+    try { await saved($, Math.min(1000, next.budget.remainingMs - 250), next.signal) } catch {}
     // The status line names this conversation's newest change; after a /clear it is not the next one's.
     try { $.ui.status(undefined) } catch {}
     return next(e)

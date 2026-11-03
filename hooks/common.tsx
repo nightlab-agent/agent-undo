@@ -33,9 +33,11 @@ const settled = new WeakSet<Promise<unknown>>([saving])
 // holds neither the later saves nor the Edit and Write hooks that wait for them. A write passed by is kept in
 // `passed` until it lands: the ending conversation's copy and scrub() wait for those too, so a late write of
 // theirs never lands over a newer list. A save already done costs no timer; a refused sleep waits as before.
+// A write already passed by is not waited for again: its landing queues the next save itself.
 const passed = new Set<Promise<unknown>>()
 function after($: EngineInterface, prev: Promise<unknown>): Promise<unknown> {
   if (settled.has(prev)) return prev
+  if (passed.has(prev)) return Promise.resolve()
   const late = Symbol('late')
   const stop = new AbortController()
   return Promise.race([prev, $.clock.sleep(1000, { signal: stop.signal }).then(() => late, () => prev)]).then(got => {
@@ -108,8 +110,8 @@ export async function mirrorEnding($: EngineInterface, id: string): Promise<void
 }
 
 /** Waits for the queued saves, at most `ms` (the engine's own example saves in session.end before its end step);
- * true when the queue stood still before the bound. */
-export async function saved($: EngineInterface, ms: number, signal?: AbortSignal, records = false): Promise<boolean> {
+ * true when the queue stood still before the bound. With `all`, also the writes passed by (restore's read). */
+export async function saved($: EngineInterface, ms: number, signal?: AbortSignal, records = false, all = false): Promise<boolean> {
   if (!(ms > 0) || signal?.aborted) return false
   // Ends at the bound or at the chain's abort. The engine's declarations type no timer but $.clock's (and a hot
   // reload cancels only those), so a sleep refused for another reason (a mod above denies it) leaves the abort
@@ -118,12 +120,12 @@ export async function saved($: EngineInterface, ms: number, signal?: AbortSignal
     signal?.addEventListener('abort', () => done(), { once: true })
     if (Number.isFinite(ms)) $.clock.sleep(ms, { signal }).then(done, () => { if (!signal || signal.aborted) done() })
   })
-  return Promise.race([quiet(records).then(() => true), bound.then(() => false)])
+  return Promise.race([quiet(records, all).then(() => true), bound.then(() => false)])
 }
 
 // With `records`, also the edits between their tool result and their mirror() (the end's wait; never restore's,
 // which runs inside one and would wait for itself).
-const quiet = async (records: boolean) => { for (;;) { await still(); if (!records || recording === 0) return; await idle } }
+const quiet = async (records: boolean, all: boolean) => { for (;;) { await still(all); if (!records || recording === 0) return; await idle } }
 let recording = 0
 let idle = Promise.resolve()
 let idleDone = () => {}
@@ -131,8 +133,15 @@ export const beginRecord = () => { if (recording++ === 0) idle = new Promise<voi
 export const endRecord = () => { if (--recording === 0) idleDone() }
 
 // A save queued during the wait (an edit landing while the conversation ends) replaces `saving`: this settles when
-// the queue stands still.
-const still = async () => { for (let p = saving; ; p = saving) { await p; if (p === saving) return } }
+// the queue stands still. With `all`, also every write passed by: a cleanup restore() stopped waiting for still
+// writes the copy, and its landing queues a save, so `saving` moves.
+const still = async (all = false) => {
+  for (let p = saving; ; p = saving) {
+    await p
+    if (all) await Promise.all([...passed])
+    if (p === saving) return
+  }
+}
 
 async function save($: EngineInterface, ending?: { id: string; list: Change[] }) {
   const id = ending?.id ?? await $.session.id()
@@ -209,7 +218,9 @@ async function restore($: EngineInterface, id: string): Promise<{ may: boolean; 
   // then on. A write that lands later (the store held over a second) is then written over, so the edits only it
   // carried leave the undo list; their files keep them. Waiting for it instead kept every later edit out of the copy
   // and the copy refused for colliding numbers once it landed (tests/review-undo15.test.tsx).
-  await saved($, 1000)
+  // A write passed by (a cleanup of the copies another restore stopped waiting for) is waited for under the same
+  // second (tests/review-cr4.test.tsx).
+  await saved($, 1000, undefined, false, true)
   // One more try for a read refused once (the file busy); a second refusal leaves no copy written.
   const got = await $.store.get(keyOf(id)).catch(() => $.store.get(keyOf(id)))
   if (!got || typeof got !== 'object') return yes

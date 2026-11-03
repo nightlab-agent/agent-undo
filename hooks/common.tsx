@@ -14,6 +14,47 @@ const MAX_FILES = 200
 // engine's scan lists a module's state per file). Change the tag in all three when a Change's
 // fields change: it declines what an earlier version stored.
 const changes = atom({ plugin: 'agent-undo', key: 'changes' } as const, [], { shape: 'changes-2' })
+const SHAPE = 'changes-2'
+
+// A copy of the list in the plugin's store, `changes:<session id>` = { shape, list }, so a new
+// process for the same session finds it (`$.state` does not outlive the process). `sessions` names
+// the stored ones, the most recently written last; only the last KEEP are kept.
+const KEEP = 5
+const keyOf = (id: string) => `changes:${id}`
+let saving: Promise<unknown> = Promise.resolve()
+
+/** Writes the session's list to the store as it stands now; a failure only leaves no copy. */
+export function mirror($: EngineInterface): Promise<void> {
+  const p = saving.then(() => save($)).catch(() => undefined)
+  saving = p
+  return p
+}
+
+async function save($: EngineInterface) {
+  const id = await $.session.id()
+  const list = await read($, changes)
+  try {
+    await $.store.set(keyOf(id), { shape: SHAPE, list })
+  } catch {
+    // Too large for the store: no copy rather than a stale one.
+    await $.store.delete(keyOf(id))
+    return
+  }
+  const was = await $.store.get('sessions')
+  const ids = (Array.isArray(was) ? was.filter((x): x is string => typeof x === 'string') : []).filter(x => x !== id)
+  ids.push(id)
+  const kept = ids.slice(-KEEP)
+  if (was === undefined || JSON.stringify(was) !== JSON.stringify(kept)) await $.store.set('sessions', kept)
+  for (const k of await $.store.keys()) {
+    if (k.startsWith('changes:') && !kept.some(x => keyOf(x) === k)) await $.store.delete(k)
+  }
+}
+
+/** Changes the session's list, then mirrors it to the store. */
+export async function updateList($: EngineInterface, f: (list: readonly Change[]) => Change[]) {
+  await update($, changes, f)
+  await mirror($)
+}
 
 export const time = (iso: string) => {
   const d = new Date(iso)
@@ -63,7 +104,7 @@ export async function record($: EngineInterface, c: Omit<Change, 'n'>) {
   if (c.tool !== 'Bash') touched(c.file)
   const lines = c.hunks.reduce((s, h) => s + h.before.length + h.after.length, 0)
   const kept = lines > MAX_LINES || (c.files?.length ?? 0) > MAX_FILES ? { ...c, hunks: [], files: c.files && [], tooLarge: true } : c
-  await update($, changes, list => {
+  await updateList($, list => {
     const n = list.reduce((m, x) => Math.max(m, x.n), 0) + 1
     return [...list, { ...kept, n }].slice(-MAX_CHANGES)
   })

@@ -1,7 +1,6 @@
 # Changelog
 
-## Unreleased
-
+## 0.2.1 - 2026-11-03
 - Seen on a screen: two writes by an MCP tool listed, one undone, the other kept (README picture;
   the preview's small MCP server is `preview/mcp-writer.js`, tested in `tests/mcp-writer.test.mjs`).
 - Git commands that throw away uncommitted work (`checkout --`, `restore`, `reset --hard`,

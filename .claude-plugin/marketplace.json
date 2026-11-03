@@ -6,7 +6,7 @@
       "name": "agent-undo",
       "source": "./",
       "description": "Undo one of Claude's edits hunk by hunk, or (in a git repo) one file a shell command or MCP tool call changed, keeping your own changes.",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "category": "productivity"
     }
   ],

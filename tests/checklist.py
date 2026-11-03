@@ -51,18 +51,27 @@ hooks = ROOT / 'hooks/hooks.json'
 modules = json.loads(hooks.read_text()).get('modules', []) if hooks.is_file() else []
 for mod in modules:
     path = ROOT / 'hooks' / mod
-    text = path.read_text()
-    for event in sorted(set(re.findall(r"""\bon\(\s*['"]([\w.]+)['"]""", text))):
+    for event in sorted(set(re.findall(r"""\bon\(\s*['"]([\w.]+)['"]""", path.read_text()))):
         check(f'`{event}`' in readme, f'README names the hook `{event}` and what it does', str(path))
+
+# The safety rules read the modules hooks.json names and every other non-test source file under hooks/ and
+# types/ (both shipped; the modules import from ../types), in subfolders too.
+sources = sorted({ROOT / 'hooks' / m for m in modules} |
+                 {p for d in ('hooks', 'types') for p in (ROOT / d).rglob('*.*')
+                  if p.is_file() and re.search(r'\.[mc]?[jt]sx?$', p.name)
+                  and not re.search(r'\.test\.[mc]?[jt]sx?$', p.name)})
+for path in sources:
+    text = path.read_text()
+    name = path.relative_to(ROOT).as_posix()
     hits = sorted({m.group(0) for m in ENV_READ.finditer(text)})
-    check(not hits, 'the module reads no environment variable', f'{path}: {", ".join(hits)}; use a userConfig option')
+    check(not hits, f'{name} reads no environment variable', f'{", ".join(hits)}; use a userConfig option')
     words_in = sorted({m.group(0).lower() for c in comments(text) for m in SCARY_WORD.finditer(c)})
-    check(not words_in, 'no comment names credentials, secrets or transcripts', f'{path}: {", ".join(words_in)}')
+    check(not words_in, f'no comment in {name} names credentials, secrets or transcripts', ", ".join(words_in))
     writes = re.findall(r'\$\.fs\.write\(\s*([^,]+),', text)
     # agent-undo: `c.file` is a file Claude's own Edit or Write changed this session, written back only
     # on the person's /agent-undo (or their ask to Claude); the README says so under "What it writes".
     loose = [w for w in writes if not re.match(r"""['"`]|`\$\{dir|\$\{""", w.strip()) and 'dir' not in w and w.strip() != 'c.file']
-    check(not loose, 'every write path is fixed text or under the option folder', f'{path}: {loose}')
+    check(not loose, f'every write path in {name} is fixed text or under the option folder', str(loose))
 
 if (ROOT / 'CLAUDE.md').is_file():
     check(False, 'no CLAUDE.md at the plugin root', 'the directory does not load it (warning only)', warn=True)

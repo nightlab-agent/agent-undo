@@ -52,9 +52,12 @@ own diff of that edit, and numbers each hunk:
 - Only this session's edits. The list is also kept in the mod's own store
   (in your Claude Code configuration folder), under the session's id, for
   the 5 sessions written most recently. A new process that reports the same
-  session id finds the list again; the tests show this. Whether
-  `claude --resume` keeps the session id has not been tested and not yet
-  seen on a screen; if it does not, the list starts empty after a resume.
+  session id finds the list again; the tests show this. Claude Code's docs
+  imply a plain `claude --resume` reuses the session id: `--fork-session`
+  is described as making "a new session ID instead of reusing the
+  original" (code.claude.com/docs/en/cli-reference). The list
+  coming back after a resume has not been seen on a screen yet; a new
+  session, in a preview (2026-11-02), starts with an empty list.
 - Nothing leaves your machine through this mod: it makes no network calls
   (it runs `git` and, once per repo, `cp` on your machine).
   When Claude uses its undo tool, the list goes to Claude like any other tool

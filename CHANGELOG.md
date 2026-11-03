@@ -6,8 +6,15 @@
   each undo, and an empty list takes that copy back at its first read: in the tests, a new process
   with the same session id lists the earlier edits and Bash commands and undoes them, with the
   same check as before (a file changed since is refused). Another session id starts empty; only
-  the 5 sessions written most recently are kept; a copy under another shape tag is declined.
-  Whether `claude --resume` keeps the session id is not tested and not yet seen on a screen.
+  the 5 sessions written most recently are kept; a copy saved by an older version, whose list has other fields, is ignored.
+  Claude Code's docs imply a plain `claude --resume` reuses the session id (`--fork-session`
+  makes "a new session ID instead of reusing the original", code.claude.com/docs/en/cli-reference); the list coming back
+  after a resume is not yet seen on a screen. A new session, in a preview, starts empty.
+- The stored copy: a read refused once is tried again, and no copy is written until the stored
+  one was read, so a shorter list never replaces it; older sessions are cleared before the new
+  copy is written, so a full store still keeps the newest; only sessions the store's list of saved
+  sessions names are cleared, and that list is read again before it is written, so a save by
+  another process during this one's save keeps its copy (tested for one timing).
 
 ## 0.2.0 (2026-11-02)
 

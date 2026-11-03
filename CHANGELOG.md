@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Seen on a screen: two writes by an MCP tool listed, one undone, the other kept (README picture;
+  the preview's small MCP server is `preview/mcp-writer.js`, tested in `tests/mcp-writer.test.mjs`).
 - Git commands that throw away uncommitted work (`checkout --`, `restore`, `reset --hard`,
   `clean -fd`, `stash -u`), run by Claude as a Bash command, are undone like any other command:
   a new test, `tests/git-wipe.sh`, runs them against real git with the mod's git calls and is

@@ -51,7 +51,7 @@ own diff of that edit, and numbers each hunk:
 - A file Claude created is listed, never deleted.
 - NotebookEdit and other built-in tools are not seen. Bash commands are, in a git
   repo (below).
-- MCP tools (`mcp__*`, such as a filesystem server's `write_file`): in a git repo, a call that runs without a permission question and answers without an error is recorded and undone as a Bash command is (in the tests).
+- MCP tools (`mcp__*`, such as a filesystem server's `write_file`): in a git repo, a call that runs without a permission question and answers without an error is recorded and undone as a Bash command is (in the tests, and on a screen: below).
   A call that runs while a Bash command or another MCP call runs is not recorded, and neither is the other one, except for a read-only call (next lines).
   An MCP call that errors or is interrupted is not recorded, so a partial write it made is not undone (a Bash command that fails is recorded).
   A call whose server says the tool is read-only is taken at its word: if it runs during a Bash command and writes anyway, its write is counted as that command's change.
@@ -87,6 +87,16 @@ and created `notes.txt`. Claude listed it and undid only 1.2: `greet.py` came
 back, and the other two stayed as the command left them. (The list's last
 line, which names the newest entry's own number, is folded out of view
 there: not yet seen on a screen.)
+
+An MCP tool's write is listed the same way, by server and tool:
+
+![Claude Code listing two writes by an MCP tool with agent-undo, then undoing only the change to src/greet.py](https://raw.githubusercontent.com/nightlab-agent/agent-undo/a03519efa69c982975898cfab3bc6bda8e1c8488/docs/preview-mcp.png)
+
+Seen in a Claude Code 2.1.312 terminal on 2026-11-02, with permissions
+bypassed and one small MCP server (`preview/mcp-writer.js`, its `write_file`
+tool). Claude rewrote `src/greet.py` in capitals and created `notes.txt`, one
+call each; agent-undo listed them as #1 and #2. Claude undid #1: `greet.py`
+came back as committed, and `notes.txt` stayed.
 
 - A changed or deleted file comes back as it was just before the command,
   your uncommitted changes included. It is put back only if it still reads

@@ -122,7 +122,7 @@ const tick = () => new Promise<void>(r => setTimeout(r, 0))
 
 // A real /clear: session.end for the old id (SessionEndInput, reason clear), then a new id and an empty state.
 const clearTo = async ($: $T, w: W, sid: string) => {
-  await ($ as any).session.end({ reason: 'clear', sessionId: w.sid, resume: { id: w.sid } })
+  await $.session.end({ reason: 'clear', sessionId: w.sid, resume: { id: w.sid } })
   w.state.clear(); w.sid = sid
 }
 

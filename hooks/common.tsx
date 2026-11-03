@@ -144,13 +144,16 @@ async function restore($: EngineInterface, id: string): Promise<boolean> {
   // another conversation's: it is not taken.
   if ((await $.session.id()) !== id) return false
   let took = false
-  await update($, changes, now => (now.length === 0 ? (took = true, ok) : now))
+  // update() may call its function more than once, so each call decides afresh.
+  await update($, changes, now => (now.length === 0 ? (took = true, ok) : (took = false, now)))
   if (!took) return false
   // A /clear between that check and the write put the copy into the new conversation's list:
   // asked again, the id says so, and exactly the entries taken come out (its own edits stay).
   if ((await $.session.id()) === id) return true
   const mine = new Set(ok.map(c => JSON.stringify(c)))
   await update($, changes, now => now.filter(c => !mine.has(JSON.stringify(c))))
+  // The new conversation's edits in that gap mirrored the copy into its store: write it again.
+  await mirror($)
   return false
 }
 

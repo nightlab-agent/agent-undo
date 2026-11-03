@@ -4,8 +4,11 @@
 - A /clear in the instant between the restore's session check and the list's update no longer
   lets the old session's list into the new conversation: the id is asked again after the update,
   and if it changed, exactly the entries taken come out again (in the tests,
-  `tests/review6-gap.test.tsx`; not seen on a screen, a /clear cannot be timed there). The new
-  conversation's first edit is #1.
+  `tests/review6-gap.test.tsx`; not seen on a screen, a /clear cannot be timed there). The
+  stored copy is written again after, so an edit the new conversation makes in that instant does
+  not carry the old entries into its store, and a later resume does not list them
+  (`tests/review7-mirror.test.tsx`, `tests/review7-ts-gap.test.tsx`). Such an edit keeps the
+  number it was given, as every entry does.
 
 ## 0.2.1 - 2026-11-03
 - Seen on a screen: two writes by an MCP tool listed, one undone, the other kept (README picture;

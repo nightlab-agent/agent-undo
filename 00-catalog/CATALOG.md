@@ -13,6 +13,7 @@
 | `tests/agent-undo.test.tsx` | The tests, the collision cases included. |
 | `tests/release.sh` | The release check. |
 | `tests/bash.test.tsx` | Tests of the Bash record. |
+| `tests/mcp.test.tsx` | Tests of the MCP tool record (the Bash record's snapshots around an `mcp__*` call). |
 | `tests/pending/review4-resume.test.txt` | Failing tests from the second review of the stored list (0.2.1, held); rename to .tsx when the fix starts. |
 | `tests/review-bash.test.tsx`, `tests/review2-*.tsx`, `tests/words-code.test.tsx` | The 0.2.0 reviews' findings as tests, each beside a passing comparison. |
 | `tests/resume.test.tsx` | The list across a new process: kept in the store per session id, restored, bounded, declined under another tag. |

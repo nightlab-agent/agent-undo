@@ -35,6 +35,8 @@ export type Repo = {
   locked: boolean
   /** git gc removed objects the private index still names: its next write-tree fails until it is seeded again. */
   pruned: boolean
+  /** Any other tool (an MCP tool, or an unknown one), by name: what it does to the files; 'error' answers an error. */
+  tools: Record<string, (f: Map<string, string>) => void | 'error' | Promise<void | 'error'>>
 }
 
 export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: boolean; top?: string } = {}): Repo => {
@@ -42,7 +44,7 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
   const IDX = `${top}/.git/agent-undo.index`
   const repo: Repo = {
     files: new Map(Object.entries(files0).map(([k, v]) => [`${ROOT}/${k}`, v])),
-    runs: [], git: opts.git ?? true, scripts: {}, adds: 0, verdict: 'allow', locked: false, pruned: false,
+    runs: [], git: opts.git ?? true, scripts: {}, adds: 0, verdict: 'allow', locked: false, pruned: false, tools: {},
   }
   const trees = new Map<string, Map<string, string>>()
   const rel = (p: string) => p.slice(ROOT.length + 1)
@@ -132,6 +134,12 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
       return { result: { filePath: x.file_path, oldString: x.old_string, newString: x.new_string, originalFile: was,
         structuredPatch: [], userModified: false, replaceAll: false } } as never
     }
+    const tool = repo.tools[x.tool]
+    if (tool) {
+      // As core answers an MCP tool: its content blocks, or an error the model reads.
+      if ((await tool(repo.files)) === 'error') return { isError: true, result: 'Error: boom', text: 'Error: boom' } as never
+      return { result: [{ type: 'text', text: 'ok' }], text: 'ok' } as never
+    }
     throw new Error(`unexpected tool ${x.tool}`)
   })
   on('tool.check', () => ({ decision: repo.verdict }) as never)
@@ -153,6 +161,13 @@ export const bash = async ($: $T, repo: Repo, command: string, f: Script, more: 
     ...(more.agentId ? { agentId: more.agentId } : {}) })) as { decision: string }
   if (v.decision === 'deny') return { deny: 'denied' }
   return $.tool.call({ tool: 'Bash', command, tool_use_id, ...more } as never)
+}
+/** Any other tool (an MCP tool), decided first and then run under one id, as `bash` is. A deny is the engine's. */
+export const tool = async ($: $T, repo: Repo, name: string, f: Repo['tools'][string], args: Record<string, unknown> = {}) => {
+  repo.tools[name] = f
+  const tool_use_id = `toolu_${++calls}`
+  await ($ as any).tool.check({ tool: name, input: args, tool_use_id })
+  return $.tool.call({ tool: name, tool_use_id, ...args } as never)
 }
 export const edit = ($: $T, file: string, a: string, b: string) =>
   $.tool.call({ tool: 'Edit', file_path: `${ROOT}/${file}`, old_string: a, new_string: b } as never)

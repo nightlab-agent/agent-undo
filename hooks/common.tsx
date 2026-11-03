@@ -89,7 +89,10 @@ export async function saved($: EngineInterface, ms: number, signal?: AbortSignal
     signal?.addEventListener('abort', () => done(), { once: true })
     if (Number.isFinite(ms)) $.clock.sleep(ms, { signal }).then(done, () => { if (signal?.aborted) done() })
   })
-  await Promise.race([saving, bound])
+  // A save queued during the wait (an edit landing while the conversation ends) replaces `saving`: wait until
+  // the queue stands still, under the same bound.
+  const drained = (async () => { for (let p = saving; ; p = saving) { await p; if (p === saving) return } })()
+  await Promise.race([drained, bound])
 }
 
 async function save($: EngineInterface, ending?: { id: string; list: Change[] }) {

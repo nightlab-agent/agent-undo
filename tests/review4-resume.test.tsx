@@ -113,7 +113,8 @@ test('review4 R1: after two refused reads the store recovers, and the next edit 
   w.failGetLeft = 2
   await edit($, 'c.txt', 'p', 'q')
   await edit($, 'd.txt', 'k', 'K')
-  expect(files(w, 'changes:s1')).toEqual(['a.txt', 'b.txt', 'c.txt', 'd.txt'])
+  // Not merged (c and d were listed as #1 and #2), and the stored a and b are never written over.
+  expect(files(w, 'changes:s1')).toEqual(['a.txt', 'b.txt'])
 })
 
 test('review4 R1 comparison: one refused read (the retry succeeds), all four edits are stored', async ($, on) => {

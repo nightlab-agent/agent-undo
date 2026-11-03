@@ -63,7 +63,8 @@ async function save($: EngineInterface) {
 
 // Restored once per session id in this process: at the first read or change after a start.
 let restoring: { id: string; done: Promise<void> } | undefined
-// The session id whose stored copy was read (or found absent); a failed read is tried again.
+// The session id whose stored copy was read (or found absent) and is now the list, so saving it
+// writes nothing shorter; a failed read is tried again.
 let restored: string | undefined
 
 /** A start (a new process, or new code) looks in the store again at the first read. */
@@ -81,7 +82,7 @@ export async function restoreList($: EngineInterface): Promise<void> {
         id,
         // A restore that settles after a newer one began (/clear: a new id, same process) is not this session's.
         done: restore($, id).then(
-          () => { if (restoring === mine) restored = id },
+          may => { if (restoring === mine && may) restored = id },
           () => { if (restoring === mine) restoring = undefined },
         ),
       }
@@ -93,12 +94,13 @@ export async function restoreList($: EngineInterface): Promise<void> {
   }
 }
 
-async function restore($: EngineInterface, id: string) {
+/** True when this process may write the session's copy: none was stored, or it is now the list. */
+async function restore($: EngineInterface, id: string): Promise<boolean> {
   // One more try for a read refused once (the file busy); a second refusal leaves no copy written.
   const got = await $.store.get(keyOf(id)).catch(() => $.store.get(keyOf(id)))
-  if (!got || typeof got !== 'object') return
+  if (!got || typeof got !== 'object') return true
   const { shape, list } = got as { shape?: unknown; list?: unknown }
-  if (shape !== SHAPE || !Array.isArray(list)) return
+  if (shape !== SHAPE || !Array.isArray(list)) return true
   const ok = (list as unknown[]).filter((c): c is Change => {
     if (!c || typeof c !== 'object') return false
     const x = c as Partial<Change>
@@ -106,7 +108,12 @@ async function restore($: EngineInterface, id: string) {
     const lines = x.hunks.reduce((s, h) => s + (h?.before?.length ?? 0) + (h?.after?.length ?? 0), 0)
     return lines <= MAX_LINES && (x.files?.length ?? 0) <= MAX_FILES
   }).slice(-MAX_CHANGES)
-  if (ok.length > 0) await update($, changes, now => (now.length === 0 ? ok : now))
+  if (ok.length === 0) return true
+  // Edits listed while the store refused its reads keep their numbers (the user may have seen them),
+  // so the stored copy is not merged in; nor is it written over: it outlives this process.
+  let took = false
+  await update($, changes, now => (now.length === 0 ? (took = true, ok) : now))
+  return took
 }
 
 /** Changes the session's list, then mirrors it to the store. */

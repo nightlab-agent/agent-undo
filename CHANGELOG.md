@@ -1,6 +1,10 @@
 # Changelog
 
 ## 0.2.2 - 2026-11-03
+- The list stays under the 4 MiB Claude Code allows it, dropping the oldest entries first; an
+  edit that alone would fill it is listed as too large. Before, once big edits took the list past
+  that size, each new edit was refused there and never listed, with no word (in the tests,
+  `tests/review-gate-statecap.test.tsx`; not seen on a screen).
 - When a restored list gained entries from the stored copy, the copy is written again without
   holding up the edit or undo that asked: before, a store write that never finished left
   /agent-undo with no answer and every later Edit or Write waiting (in the tests,

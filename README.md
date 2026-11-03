@@ -42,8 +42,10 @@ own diff of that edit, and numbers each hunk:
   tells you what the tool reported. Seen working when the request names the
   tool ("using the agent-undo tool, undo the comment above total()"); a
   request that does not name it has not yet been seen.
-- The list shows the newest 20 edits and keeps the newest 300. An edit of more
-  than 4000 lines is listed as too large and cannot be undone.
+- The list shows the newest 20 edits and keeps the newest 300, fewer when they
+  are big: the oldest go first so the list stays under the 4 MiB Claude Code
+  keeps for it. An edit of more than 4000 lines, or one that alone would fill
+  that room, is listed as too large and cannot be undone.
 - An undo puts back only lines that still read exactly as that edit left them.
   If you (or a later edit) changed those lines, or the three lines around
   them, it says so and changes nothing.

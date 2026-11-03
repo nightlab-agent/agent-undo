@@ -6,6 +6,20 @@ import type { Change } from '../types'
 const MAX_CHANGES = 300
 const MAX_LINES = 4000
 const MAX_FILES = 200
+// Claude Code refuses a state value over 4,194,304 characters of JSON (its own error names the limit), and a
+// refused list update loses the edit with no word: the list stays under it with room to spare.
+const MAX_CHARS = 4_000_000
+
+/** The newest MAX_CHANGES entries, then the oldest dropped until the list's JSON fits under MAX_CHARS. */
+function fit(list: Change[]): Change[] {
+  let out = list.slice(-MAX_CHANGES)
+  let size = JSON.stringify(out).length
+  while (out.length > 1 && size > MAX_CHARS) {
+    size -= JSON.stringify(out[0]).length + 1
+    out = out.slice(1)
+  }
+  return out
+}
 
 // What both records share: the session's list, the clock and path spellings, the one-at-a-time
 // queue for undos and edits, and which files an Edit or Write is touching while a command runs.
@@ -252,13 +266,14 @@ async function restore($: EngineInterface, id: string): Promise<{ may: boolean; 
   if (!got || typeof got !== 'object') return yes
   const { shape, list } = got as { shape?: unknown; list?: unknown }
   if (shape !== SHAPE || !Array.isArray(list)) return yes
-  const ok = (list as unknown[]).filter((c): c is Change => {
+  const valid = (list as unknown[]).filter((c): c is Change => {
     if (!c || typeof c !== 'object') return false
     const x = c as Partial<Change>
     if (typeof x.n !== 'number' || typeof x.file !== 'string' || typeof x.at !== 'string' || !Array.isArray(x.hunks)) return false
     const lines = x.hunks.reduce((s, h) => s + (h?.before?.length ?? 0) + (h?.after?.length ?? 0), 0)
     return lines <= MAX_LINES && (x.files?.length ?? 0) <= MAX_FILES
-  }).slice(-MAX_CHANGES)
+  })
+  const ok = fit(valid)
   if (ok.length === 0) return yes
   // Edits listed while the store refused its reads keep their numbers (the user may have seen them),
   // so a stored entry is merged in only when it is numbered below every listed one; otherwise the
@@ -278,7 +293,7 @@ async function restore($: EngineInterface, id: string): Promise<{ may: boolean; 
     // An earlier restore of this session in this process (one a /clear and /resume overtook) filled it.
     if (missing.length === 0) return (had = true, now)
     const low = Math.min(...now.map(c => c.n))
-    return missing.every(c => c.n < low) ? (added = missing, [...missing, ...now].slice(-MAX_CHANGES)) : now
+    return missing.every(c => c.n < low) ? (added = missing, fit([...missing, ...now])) : now
   })
   if (had) return (await $.session.id()) === id ? yes : no
   if (added.length === 0) return no
@@ -388,10 +403,11 @@ export const snapped = (c: { tool: string }) => c.tool === 'Bash' || c.tool === 
 export async function record($: EngineInterface, c: Omit<Change, 'n'>) {
   if (!snapped(c)) touched(c.file)
   const lines = c.hunks.reduce((s, h) => s + h.before.length + h.after.length, 0)
-  const kept = lines > MAX_LINES || (c.files?.length ?? 0) > MAX_FILES ? { ...c, hunks: [], files: c.files && [], tooLarge: true } : c
+  const big = lines > MAX_LINES || (c.files?.length ?? 0) > MAX_FILES || JSON.stringify(c).length > MAX_CHARS
+  const kept = big ? { ...c, hunks: [], files: c.files && [], tooLarge: true } : c
   await updateList($, list => {
     const n = list.reduce((m, x) => Math.max(m, x.n), 0) + 1
-    return [...list, { ...kept, n }].slice(-MAX_CHANGES)
+    return fit([...list, { ...kept, n }])
   })
   await showNewest($)
 }

@@ -47,8 +47,9 @@ own diff of that edit, and numbers each hunk:
   them, it says so and changes nothing.
   Your edits elsewhere in the file stay.
 - A file Claude created is listed, never deleted.
-- NotebookEdit and other tools are not seen. Bash commands are, in a git
+- NotebookEdit and other built-in tools are not seen. Bash commands are, in a git
   repo (below).
+- MCP tools (`mcp__*`, such as a filesystem server's `write_file`): in a git repo, recorded and undone as a Bash command is (in the tests).
 - Only this session's edits. The list is also kept in the mod's own store
   (in your Claude Code configuration folder), under the session's id, for
   the 5 sessions written most recently. A new process that reports the same

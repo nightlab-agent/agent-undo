@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- MCP tools: in a git repo, a call to any `mcp__*` tool (other than agent-undo's own) that ran
+  without a question is recorded the way a Bash command is, listed as `MCP <server> <tool>` with
+  its files, and undone with the same shell undo (a file changed since is refused, a new file is
+  never deleted, the private index only). A call that ran while a Bash command or another MCP
+  call ran records neither; a denied call, or one that answered an error, records nothing (in
+  the tests; not yet seen on a screen).
+- The type check passes whether or not the engine's tool result declarations are present.
+
 - The list is copied into the mod's store under the session's id after each recorded change and
   each undo, and an empty list takes that copy back at its first read: in the tests, a new process
   with the same session id lists the earlier edits and Bash commands and undoes them, with the

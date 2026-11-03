@@ -47,11 +47,14 @@
   other stored copies a second at most, so a stored-copy write that never finishes no longer holds
   that edit, and it is listed (`tests/review-cr-whole.test.tsx`, Z1). With that write stuck, the
   edit waits about two seconds in all: one for its read of the stored copy and one for the
-  cleanup, which is not waited for a second time (2.0 s in `tests/review-cr4.test.tsx`, R2). The
+  cleanup, which is not waited for a second time (under 2.5 s in `tests/review-cr4.test.tsx`, R2;
+  about 3 s before). The
   cleanup itself still runs once that write lands, and the list is saved again after it. A /resume
   back to a conversation whose stored copy that cleanup has not yet cleaned waits for it under its
-  read's one second, so the old entries are not listed again (`tests/review-cr4.test.tsx`, R1); a
-  cleanup that never finishes costs that read its whole second.
+  read's one second, so the old entries are not listed again if it lands within that second
+  (`tests/review-cr4.test.tsx`, R1). An exit waits for it the same way, so a later `claude --resume`
+  does not list them either (`tests/review-pr5.test.tsx`). A known limit: a cleanup that lands
+  later, or never, costs the read its whole second, and the old entries are listed and stored again.
 - A Bash command or MCP call that changed files and is still being recorded when a /clear or an
   exit comes is waited for too, under the same second (`tests/review-undo15ts.test.tsx`, B1).
 - A /clear and a /resume back (or a /resume to another conversation) while the stored list was

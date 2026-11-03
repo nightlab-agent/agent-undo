@@ -315,8 +315,9 @@ export const registerShell = (on: Parameters<Register>[0]) => {
       try { await mirrorEnding($, e.sessionId) } catch {}
       forgetRestore()
     }
-    // The last edit's copy (and the ending list's) lands before the end step, within the chain's short bound.
-    try { await saved($, Math.min(1000, next.budget.remainingMs - 250), next.signal, true) } catch {}
+    // The last edit's copy (and the ending list's, and every write passed by, as a /resume back waits for them)
+    // lands before the end step, within the chain's short bound (tests/review-pr5.test.tsx).
+    try { await saved($, Math.min(1000, next.budget.remainingMs - 250), next.signal, true, true) } catch {}
     // The status line names this conversation's newest change; after a /clear it is not the next one's.
     try { $.ui.status(undefined) } catch {}
     return next(e)

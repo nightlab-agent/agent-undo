@@ -218,8 +218,8 @@ async function restore($: EngineInterface, id: string): Promise<{ may: boolean; 
   // then on. A write that lands later (the store held over a second) is then written over, so the edits only it
   // carried leave the undo list; their files keep them. Waiting for it instead kept every later edit out of the copy
   // and the copy refused for colliding numbers once it landed (tests/review-undo15.test.tsx).
-  // A write passed by (a cleanup of the copies another restore stopped waiting for) is waited for under the same
-  // second (tests/review-cr4.test.tsx).
+  // Every write passed by (a slow edit save, or a cleanup another restore stopped waiting for) is waited for under
+  // the same second (tests/review-cr4.test.tsx).
   await saved($, 1000, undefined, false, true)
   // One more try for a read refused once (the file busy); a second refusal leaves no copy written.
   const got = await $.store.get(keyOf(id)).catch(() => $.store.get(keyOf(id)))

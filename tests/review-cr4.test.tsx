@@ -139,7 +139,7 @@ const lateScrub = async ($: $T, w: W, slow: boolean) => {
   await ms(3000); await settle()
   return { ed }
 }
-test('review-cr4 R1: a slow save of s2 holds scrub() past restore\'s second; s2 resumed in the same process lists s1\'s a.txt and b.txt again', { timeoutMs: 20000 }, async ($, on) => {
+test('review-cr4 R1: a slow save of s2 holds scrub() past restore\'s second; s2 resumed in the same process lists only its own edits', { timeoutMs: 20000 }, async ($, on) => {
   const w = world(on, all)
   await lateScrub($, w, true)
   expect(w.sid).toBe('s2')

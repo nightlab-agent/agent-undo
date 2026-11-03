@@ -251,8 +251,9 @@ async function restore($: EngineInterface, id: string): Promise<{ may: boolean; 
   const mine = new Set(added.map(entryKey))
   await update($, changes, now => now.filter(c => !mine.has(entryKey(c))))
   // The new conversation's edits in that gap mirrored the copy into its store, and a second /clear
-  // may have come since: every other session's stored copy loses the taken entries.
-  await scrub($, id, mine)
+  // may have come since: every other session's stored copy loses the taken entries. Waited for a
+  // second at most, as a save is: the cleanup waits for passed-by writes, which may never land.
+  await after($, scrub($, id, mine))
   await mirror($)
   return no
 }

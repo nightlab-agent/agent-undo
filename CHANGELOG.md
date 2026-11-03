@@ -43,6 +43,10 @@
   over the newer copy.
 - A conversation's copy that a later save passed by no longer waits for itself, so the next /clear's
   copy is written (`tests/review-undo19.test.tsx`, Z1).
+- An Edit or Write that takes an old conversation's entries back out waits for the cleanup of the
+  other stored copies a second at most, so a stored-copy write that never finishes no longer holds
+  that edit, and it is listed (`tests/review-cr-whole.test.tsx`, Z1). The cleanup itself still
+  runs once that write lands, and the list is saved again after it.
 - A Bash command or MCP call that changed files and is still being recorded when a /clear or an
   exit comes is waited for too, under the same second (`tests/review-undo15ts.test.tsx`, B1).
 - A /clear and a /resume back (or a /resume to another conversation) while the stored list was

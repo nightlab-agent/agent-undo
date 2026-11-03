@@ -32,6 +32,8 @@ export function mirror($: EngineInterface): Promise<void> {
 
 async function save($: EngineInterface) {
   const id = await $.session.id()
+  // Until this session's stored copy was read, writing would put a shorter list over it.
+  if (restored !== id) return
   const list = await read($, changes)
   try {
     await $.store.set(keyOf(id), { shape: SHAPE, list })
@@ -52,9 +54,11 @@ async function save($: EngineInterface) {
 
 // Restored once per session id in this process: at the first read or change after a start.
 let restoring: { id: string; done: Promise<void> } | undefined
+// The session id whose stored copy was read (or found absent); a failed read is tried again.
+let restored: string | undefined
 
 /** A start (a new process, or new code) looks in the store again at the first read. */
-export const forgetRestore = () => { restoring = undefined }
+export const forgetRestore = () => { restoring = undefined; restored = undefined }
 
 /**
  * An empty list takes this session's stored copy, if the store holds one under the same shape
@@ -63,7 +67,16 @@ export const forgetRestore = () => { restoring = undefined }
 export async function restoreList($: EngineInterface): Promise<void> {
   try {
     const id = await $.session.id()
-    if (!restoring || restoring.id !== id) restoring = { id, done: restore($, id).catch(() => undefined) }
+    if (!restoring || restoring.id !== id) {
+      const mine: { id: string; done: Promise<void> } = {
+        id,
+        done: restore($, id).then(
+          () => { restored = id },
+          () => { if (restoring === mine) restoring = undefined },
+        ),
+      }
+      restoring = mine
+    }
     await restoring.done
   } catch {
     // No session id or no store: the list is this process's only.
@@ -71,7 +84,8 @@ export async function restoreList($: EngineInterface): Promise<void> {
 }
 
 async function restore($: EngineInterface, id: string) {
-  const got = await $.store.get(keyOf(id))
+  // One more try for a read refused once (the file busy); a second refusal leaves no copy written.
+  const got = await $.store.get(keyOf(id)).catch(() => $.store.get(keyOf(id)))
   if (!got || typeof got !== 'object') return
   const { shape, list } = got as { shape?: unknown; list?: unknown }
   if (shape !== SHAPE || !Array.isArray(list)) return

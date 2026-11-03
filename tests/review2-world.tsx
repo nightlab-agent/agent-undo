@@ -1,6 +1,6 @@
 // A variant of world.tsx for the repo-top arithmetic: the session root, the top git reports
 // (symlinks resolved), the prefix git reports, and which spellings of the top really are the
-// repo (a git command run anywhere else fails, as real git does: scratch/s313/review2/realgit).
+// repo (a git command run anywhere else fails, as real git does).
 import type { On, $T, Script } from './world'
 import { blob } from './world'
 

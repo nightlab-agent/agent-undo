@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import { ROOT, bash, repoWorld, start, tick, undo } from './world'
 
-// From the words critic of 0.2.0 (s313): two claims the code did not keep.
+// From a check of the 0.2.0 text: two claims the code did not keep.
 
 test('a command approved at a prompt that goes to the background still stops shell records', async ($, on) => {
   const repo = repoWorld(on, { 'gen.txt': 'v1\n', 'a.txt': 'a\n' })

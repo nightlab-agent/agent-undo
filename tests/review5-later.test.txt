@@ -121,7 +121,7 @@ test('review5 F3 comparison: the same save landing before this one\'s eviction i
   expect(w.disk.has('changes:old2')).toBe(false)
 })
 
-// --- F4: moved to review5-f4.test.tsx (s325).
+// --- F4: moved to review5-f4.test.tsx.
 
 // --- F5 (the change's own promise, "a stored copy not taken as the list is never overwritten"):
 // a copy under another shape tag (a later version's) is not taken, yet the first edit overwrites it.

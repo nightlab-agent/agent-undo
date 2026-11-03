@@ -1,4 +1,4 @@
-// Code review 2026-11-02 (s335) of 6de9a3c..51fe765: each finding is a failing test beside a
+// Tests for 6de9a3c..51fe765: each finding is a failing test beside a
 // passing comparison case of the nearest normal case.
 import { expect, test } from 'claude-code/testing'
 import { ROOT, bash, repoWorld, start, tick, tool, undo } from './world'

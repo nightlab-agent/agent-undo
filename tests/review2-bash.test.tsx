@@ -38,7 +38,7 @@ test('review2 R1 comparison: the same interrupted call, its check finished first
 // snapshot is then taken before the question, and F3 is back. Modelled by order: the check
 // beneath says allow, the question (from the hook above) waits, the person saves, the call runs.
 
-// R2 note (s313): this passes because the snapshot is now taken at the check inside the call
+// Note: this passes because the snapshot is now taken at the check inside the call
 // (the host's own), after the person's save here. The real R2 case, another mod's hook above this
 // one turning the allow into a question, cannot be seen by this mod; the README says so.
 test('review2 R2: an allow beneath turned into an ask above: the person\'s save during the question is not undone', async ($, on) => {

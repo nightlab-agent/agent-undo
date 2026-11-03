@@ -1,4 +1,4 @@
-// Code review loop 2 (s335 cr2) of 0c47e4d..bdcad69: each probe beside its nearest normal case.
+// Tests for 0c47e4d..bdcad69: each probe beside its nearest normal case.
 import { expect, test } from 'claude-code/testing'
 import { ROOT, bash, edit, repoWorld, start, tick, tool, undo } from './world'
 

@@ -113,7 +113,7 @@ test('review F4 comparison: the same two calls one after the other each list onl
 })
 
 // ---- F5 (kind 3): git reports the repo top with symlinks resolved; Edit's file_path keeps the
-// session's spelling, so the exclusion key misses (real git: scratch/s313/cr2, see report).
+// session's spelling, so the exclusion key misses.
 
 test('review F5: an Edit during a command, in a repo reached through a symlink, is still left to the Edit record', async ($, on) => {
   const repo = repoWorld(on, { 'a.txt': 'a\n', 'b.txt': 'b\n' }, { top: '/real/proj' })

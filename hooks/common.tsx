@@ -79,8 +79,9 @@ export async function restoreList($: EngineInterface): Promise<void> {
     if (!restoring || restoring.id !== id) {
       const mine: { id: string; done: Promise<void> } = {
         id,
+        // A restore that settles after a newer one began (/clear: a new id, same process) is not this session's.
         done: restore($, id).then(
-          () => { restored = id },
+          () => { if (restoring === mine) restored = id },
           () => { if (restoring === mine) restoring = undefined },
         ),
       }

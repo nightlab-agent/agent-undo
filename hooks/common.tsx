@@ -145,7 +145,13 @@ async function restore($: EngineInterface, id: string): Promise<boolean> {
   if ((await $.session.id()) !== id) return false
   let took = false
   await update($, changes, now => (now.length === 0 ? (took = true, ok) : now))
-  return took
+  if (!took) return false
+  // A /clear between that check and the write put the copy into the new conversation's list:
+  // asked again, the id says so, and exactly the entries taken come out (its own edits stay).
+  if ((await $.session.id()) === id) return true
+  const mine = new Set(ok.map(c => JSON.stringify(c)))
+  await update($, changes, now => now.filter(c => !mine.has(JSON.stringify(c))))
+  return false
 }
 
 /** Changes the session's list, then mirrors it to the store. */

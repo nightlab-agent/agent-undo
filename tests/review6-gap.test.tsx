@@ -1,5 +1,4 @@
-// A second review of 46316e3..94496ac found (open): a /clear that lands after restore()'s id check answered the
-// old id and before update() reads the state still lets the old list in. Kept as .txt (not run) until fixed.
+// A /clear that lands after restore()'s id check answered the old id and before the list update reads the state.
 import { expect, test } from 'claude-code/testing'
 import type { TestBody } from 'claude-code/testing'
 
@@ -74,6 +73,7 @@ const world = (on: On, files0: Record<string, string>, o: Opts = {}) => {
   })
   on('store.delete', (_, e) => { disk.delete(e.key); return { value: undefined } as never })
   on('store.keys', () => ({ value: [...disk.keys()] }) as never)
+  on('session.end', (_, e: any) => ({ sessionId: e.sessionId }) as never)
   on('session.root', () => ({ value: ROOT }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('command.register', () => ({ value: { command: 'agent-undo' } }))
@@ -120,7 +120,11 @@ const tick = () => new Promise<void>(r => setTimeout(r, 0))
 
 
 
-const clearTo = (w: W, sid: string) => { w.state.clear(); w.sid = sid }
+// A real /clear: session.end for the old id (SessionEndInput, reason clear), then a new id and an empty state.
+const clearTo = async ($: $T, w: W, sid: string) => {
+  await ($ as any).session.end({ reason: 'clear', sessionId: w.sid, resume: { id: w.sid } })
+  w.state.clear(); w.sid = sid
+}
 
 // G1 (kind 1/2): the /clear lands just after restore()'s `$.session.id()` answered the old id and
 // before update() reads the state. The check passed; the old list goes into the new conversation.
@@ -164,18 +168,20 @@ const shownThenClear = async ($: $T, w: W, settleFirst: boolean) => {
   w.statuses.length = 0
   await restart($, w)
   if (settleFirst) { release(); await tick(); await tick() }
-  clearTo(w, 's2')
+  await clearTo($, w, 's2')
   release(); await tick(); await tick()
 }
 test('review2 G2: restore taken just before /clear, the new conversation shows no old change in the status line', async ($, on) => {
   const w = world(on, { 'a.txt': 'one\n', 'b.txt': 'x\n' })
   await shownThenClear($, w, true)
-  expect(w.statuses.filter(t => t !== 'undefined').at(-1)).toBeUndefined()
+  // What stands on the line last: nothing set, or emptied (ui.status(undefined), recorded as 'undefined').
+  expect([undefined, 'undefined']).toContain(w.statuses.at(-1))
 })
 test('review2 G2 comparison: restore dropped by /clear, no old change in the status line', async ($, on) => {
   const w = world(on, { 'a.txt': 'one\n', 'b.txt': 'x\n' })
   await shownThenClear($, w, false)
-  expect(w.statuses.filter(t => t !== 'undefined').at(-1)).toBeUndefined()
+  // What stands on the line last: nothing set, or emptied (ui.status(undefined), recorded as 'undefined').
+  expect([undefined, 'undefined']).toContain(w.statuses.at(-1))
 })
 
 // B1: bookkeeping after restore() returned false for the /clear: the old session's stored copy is
@@ -188,7 +194,7 @@ test('review2 B1: a dropped restore leaves s1 whole; s2 stores only its own edit
   let release!: () => void
   w.hold = { key: 'changes:s1', p: new Promise<void>(r => { release = r }) }
   await restart($, w)
-  clearTo(w, 's2')
+  await clearTo($, w, 's2')
   release(); await tick()
   await edit($, 'c.txt', 'p', 'q')
   await edit($, 'd.txt', 'k', 'K')

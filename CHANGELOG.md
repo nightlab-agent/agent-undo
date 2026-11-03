@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2 - 2026-11-03
+- A /clear in the instant between the restore's session check and the list's update no longer
+  lets the old session's list into the new conversation: the id is asked again after the update,
+  and if it changed, exactly the entries taken come out again (in the tests,
+  `tests/review6-gap.test.tsx`; not seen on a screen, a /clear cannot be timed there). The new
+  conversation's first edit is #1.
+
 ## 0.2.1 - 2026-11-03
 - Seen on a screen: two writes by an MCP tool listed, one undone, the other kept (README picture;
   the preview's small MCP server is `preview/mcp-writer.js`, tested in `tests/mcp-writer.test.mjs`).
@@ -31,8 +38,8 @@
 - After a resume the status line names the newest stored change at once (it stayed blank until
   the next change, seen on that screen). The start does not wait for the store.
   A /clear while that restore is still reading leaves the old session's list out of the new one.
-  (A /clear in the instant between that check and the list's update can still let it in, in a
-  test that times it so; kept in `tests/review6-later.test.txt`.) A /clear also empties the status line.
+  (A /clear in the instant between that check and the list's update could still let it in; fixed
+  in 0.2.2.) A /clear also empties the status line.
 - When the store is full and an older session's copy must go, a write time that could not be read
   is tried once more, and a copy whose time still cannot be read is kept, not evicted (in the tests).
 - The stored copy: a read refused once is tried again, and no copy is written until the stored

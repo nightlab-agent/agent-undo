@@ -301,7 +301,13 @@ export async function updateList($: EngineInterface, f: (list: readonly Change[]
     await update($, changes, f)
     p = mirror($)
   } finally { endRecord() }
-  await p
+  // Its own write waited for a second at most, as a save waits for the one before it: the undo and the Edit
+  // and Write hooks wait here, inside the queue every Edit and Write runs in, so a write that never landed
+  // would hold them all. It stays in `saving`, which an exit, a /clear and the next save wait for.
+  if (p === undefined || settled.has(p)) return
+  const stop = new AbortController()
+  await Promise.race([p, $.clock.sleep(1000, { signal: stop.signal }).catch(() => p)])
+  stop.abort()
 }
 
 export const time = (iso: string) => {

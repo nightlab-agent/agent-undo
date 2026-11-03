@@ -160,18 +160,18 @@ test('review-undo18 Y2: a\'s write lands at 0.3 s, inside b\'s one-second wait: 
   const { ea, eb } = await raceSleep($, w, 300)
   await ea; await eb
   await ms(100); await settle()
-  // b's save is done well before 1 s: its sleep must be stopped by now, not still counting down.
-  expect(w.sleeps.map(s => s.ms)).toEqual([1000])
-  expect(w.sleeps[0]).toEqual({ ms: 1000, aborted: true, timedOut: false })
+  // b's save is done well before 1 s: its wait for a's write, then b's own one-second wait for its own write
+  // (review-crx S1), must both be stopped by now, not still counting down.
+  expect(w.sleeps).toEqual([{ ms: 1000, aborted: true, timedOut: false }, { ms: 1000, aborted: true, timedOut: false }])
   await ms(1000)
-  expect(w.sleeps[0]!.timedOut).toBe(false)
+  expect(w.sleeps.some(s => s.timedOut)).toBe(false)
   expect(files(w, 'changes:s1')).toEqual(['a.txt', 'b.txt'])
 })
 test('review-undo18 Y2 comparison: a\'s write lands at 1.3 s: the sleep runs its second out and is not aborted', { timeoutMs: 9000 }, async ($, on) => {
   const w = world(on, all)
   const { ea, eb } = await raceSleep($, w, 1300)
   await eb; await ea; await settle(); await settle()
-  expect(w.sleeps.map(s => s.ms)).toEqual([1000])
-  expect(w.sleeps[0]).toEqual({ ms: 1000, aborted: false, timedOut: true })
+  // b's wait for a's write runs its second out; b's own wait for its own write (review-crx S1) is stopped when it lands.
+  expect(w.sleeps).toEqual([{ ms: 1000, aborted: false, timedOut: true }, { ms: 1000, aborted: true, timedOut: false }])
   expect(files(w, 'changes:s1')).toEqual(['a.txt', 'b.txt'])
 })

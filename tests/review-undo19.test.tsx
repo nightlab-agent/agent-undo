@@ -100,7 +100,8 @@ const poison = async ($: $T, w: W) => {
   setTimeout(h.release, 5000)
   await endTo($, w, 'clear', 's2')
   await edit($, 'c.txt', 'k', 'K')
-  await eb; await ms(400); await settle(); await settle()
+  // b's edit answers after its own one-second wait (review-crx S1); its write lands when it is let go, at 5 s.
+  await eb; await h.p; await ms(400); await settle(); await settle()
   expect(files(w, 'changes:s1')).toEqual(['a.txt', 'b.txt'])
   expect(files(w, 'changes:s2')).toEqual(['c.txt'])
 }

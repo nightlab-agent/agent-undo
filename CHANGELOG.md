@@ -24,6 +24,10 @@
   is waited for too, at an exit and at a /clear, under the same second, and so is one whose tool
   result came in but whose list update has not started (`tests/review-undo13ts.test.tsx`, L1, L2;
   `tests/review-undo14.test.tsx`, R1).
+- An undo or an Edit or Write whose own stored-copy write never finishes now answers after a second
+  at most, and later Edits and Writes still run: before, it waited for that write with no bound and
+  held them all (`tests/review-crx-serial.test.tsx`, S1, S2). The write is still waited for by an
+  exit, a /clear and the next save.
 - After a /clear, a stored-copy write that never finishes no longer holds `/agent-undo` and every
   later Edit and Write: the next conversation's first read waits for it a second at most
   (`tests/review-undo13.test.tsx`, L1). If the write has not landed by then, the stored copy is

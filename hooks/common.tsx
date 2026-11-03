@@ -75,6 +75,8 @@ async function put($: EngineInterface, id: string, key: string, value: unknown) 
 export async function mirrorEnding($: EngineInterface, id: string): Promise<void> {
   if (restored !== id) return
   const ending = { id, list: await read($, changes) }
+  // A conversation with no edits has nothing to keep; its empty copy would count toward KEEP and evict a real one.
+  if (ending.list.length === 0) return
   saving = saving.then(() => save($, ending)).catch(() => undefined)
 }
 

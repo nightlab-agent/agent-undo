@@ -51,6 +51,8 @@
   `tests/review-undo17.test.tsx` X1 and `tests/review-undo18.test.tsx` Y1 show the two waits;
   `tests/review-undo16.test.tsx` N1 the later edits). A bound there would let that write land last,
   over the newer copy.
+- Each "a second at most" in this release is timed by Claude Code's own timer; where another mod refuses that
+  timer, these waits are as they were before this release.
 - An Edit or Write that takes an old conversation's entries back out waits for the cleanup of the
   other stored copies a second at most, so a stored-copy write that never finishes does not hold
   that edit, and it is listed (`tests/review-cr-whole.test.tsx`, Z1). With that write stuck, the

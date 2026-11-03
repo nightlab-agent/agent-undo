@@ -4,7 +4,7 @@ import type { TestBody } from 'claude-code/testing'
 // Code review of ff35561 (0.2.2, the updateList bound). The world is review-crx-serial's, with two knobs:
 // `holdAll` holds every store.set for good (a hung store), and `sleeps: false` gives the world no clock.sleep
 // (the kit then refuses it, as a mod above that refuses it would).
-// H1 (kind 2, the s407 lesson): updateList's own one-second wait gives up on its write p without putting p in
+// H1: updateList's own one-second wait gives up on its write p without putting p in
 // `passed`, so the next save's after(p) waits a full second on the same p again; with a hung store every Edit
 // after the first costs two seconds, not "a second at most" (CHANGELOG).
 // H2 (kind 4): a refused sleep makes the new wait `.catch(() => p)`, the unbounded wait the PR removes; saved()

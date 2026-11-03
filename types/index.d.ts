@@ -41,6 +41,6 @@ export type Change = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'agent-undo': { changes: Shaped<Change[]> }
+    'agent-undo': { changes: Shaped<Change[]>; listed: Shaped<string> }
   }
 }

@@ -49,7 +49,8 @@ own diff of that edit, and numbers each hunk:
 - A file Claude created is listed, never deleted.
 - NotebookEdit and other built-in tools are not seen. Bash commands are, in a git
   repo (below).
-- MCP tools (`mcp__*`, such as a filesystem server's `write_file`): in a git repo, recorded and undone as a Bash command is (in the tests).
+- MCP tools (`mcp__*`, such as a filesystem server's `write_file`): in a git repo, a call that answers without an error is recorded and undone as a Bash command is (in the tests).
+  An MCP call that errors or is interrupted is not recorded, so a partial write it made is not undone (a Bash command that fails is recorded).
 - Only this session's edits. The list is also kept in the mod's own store
   (in your Claude Code configuration folder), under the session's id, for
   the 5 sessions written most recently. A new process that reports the same

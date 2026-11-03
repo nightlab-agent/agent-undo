@@ -7,8 +7,9 @@
   its files, and undone with the same shell undo (a file changed since is refused, a new file is
   never deleted, the private index only). A call that ran while a Bash command or another MCP
   call ran records neither, except that an MCP call the engine reports read-only, ended before
-  the other, costs the other nothing; a denied call, or one that answered an error, records nothing (in
-  the tests; not yet seen on a screen).
+  the other, costs the other nothing; a denied call records nothing, and unlike a failed Bash
+  command, an MCP call that errors or is interrupted is not recorded, so a partial write it made
+  is not undone (in the tests; not yet seen on a screen).
 - The type check passes whether or not the engine's tool result declarations are present.
 
 - The list is copied into the mod's store under the session's id after each recorded change and

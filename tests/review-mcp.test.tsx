@@ -97,3 +97,22 @@ test('R4 comparison: an undo before the MCP call; the call lists only its own fi
   expect(text).toContain('MCP filesystem write_file (1 file)')
   expect(text).not.toContain('2.1 changed a.txt')
 })
+// R3 (README promise). README:52 says MCP calls are "recorded and undone as a Bash command is";
+// a Bash command that fails is recorded with its files, an MCP call that errors (or is
+// interrupted: d.ts:13630 isError "it threw, was interrupted, or answered an error") is not.
+// Kept as a documented limit (the README says so): the errored call records nothing, so a partial
+// write it made is not undone.
+test('R3 limit: an MCP call that writes a file and then errors records nothing (a failed Bash command would list it)', async ($, on) => {
+  const repo = repoWorld(on, { 'a.txt': 'a\n' })
+  await start($)
+  await tool($, repo, 'mcp__filesystem__write_file', f => { f.set(`${ROOT}/a.txt`, 'half\n'); return 'error' })
+  const text = await undo($, '')
+  expect(text).not.toContain('1.1 changed a.txt')
+  expect(text).toContain('no edits by Claude in this session yet')
+})
+test('R3 comparison: the same MCP call answering ok lists the file', async ($, on) => {
+  const repo = repoWorld(on, { 'a.txt': 'a\n' })
+  await start($)
+  await tool($, repo, 'mcp__filesystem__write_file', f => { f.set(`${ROOT}/a.txt`, 'half\n') })
+  expect(await undo($, '')).toContain('1.1 changed a.txt')
+})

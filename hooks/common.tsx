@@ -27,12 +27,25 @@ const KEEP = 5
 const keyOf = (id: string) => `changes:${id}`
 const atOf = (id: string) => `at:${id}`
 let saving: Promise<unknown> = Promise.resolve()
+const settled = new WeakSet<Promise<unknown>>([saving])
+
+// An edit's save waits for the one before it a second at most (restore's bound), so a write that never lands
+// holds neither the later saves nor the Edit and Write hooks that wait for them. The ending conversation's copy
+// and scrub() keep the whole wait: past it, a late write of theirs would land over a newer list. A save already
+// done costs no timer; a refused sleep waits as before.
+function after($: EngineInterface, prev: Promise<unknown>): Promise<unknown> {
+  if (settled.has(prev)) return prev
+  const late = Symbol('late')
+  return Promise.race([prev, $.clock.sleep(1000).then(() => late, () => prev)]).then(got => {
+    // Passed by: once it lands, the list is saved again, so the newest copy is written last.
+    if (got === late) void prev.then(() => mirror($))
+  })
+}
+const enqueue = (p: Promise<unknown>) => { saving = p; void p.then(() => settled.add(p)); return p }
 
 /** Writes the session's list to the store as it stands now; a failure only leaves no copy. */
 export function mirror($: EngineInterface): Promise<void> {
-  const p = saving.then(() => save($)).catch(() => undefined)
-  saving = p
-  return p
+  return enqueue(after($, saving).then(() => save($)).catch(() => undefined)) as Promise<void>
 }
 
 /** Every stored session id with its write time, oldest first. A copy with no time counts as oldest; a time
@@ -78,7 +91,7 @@ export async function mirrorEnding($: EngineInterface, id: string): Promise<void
   const ending = { id, list: await read($, changes) }
   // A conversation with no edits has nothing to keep; its empty copy would count toward KEEP and evict a real one.
   if (ending.list.length === 0) return
-  saving = saving.then(() => save($, ending)).catch(() => undefined)
+  enqueue(saving.then(() => save($, ending)).catch(() => undefined))
 }
 
 /** Waits for the queued saves, at most `ms` (the engine's own example saves in session.end before its end step);
@@ -251,8 +264,7 @@ function scrub($: EngineInterface, owner: string, keys: Set<string>): Promise<vo
       }
     }
   }).catch(() => undefined)
-  saving = p
-  return p
+  return enqueue(p) as Promise<void>
 }
 
 /** Changes the session's list, then mirrors it to the store. */

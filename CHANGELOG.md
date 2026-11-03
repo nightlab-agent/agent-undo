@@ -27,7 +27,9 @@
 - After a /clear, a stored-copy write that never finishes no longer holds `/agent-undo` and every
   later Edit and Write: the next conversation's first read waits for it a second at most
   (`tests/review-undo13.test.tsx`, L1). If the write has not landed by then, the stored copy is
-  read as it stands and the new edits are stored from then on. A known limit: a write that lands
+  read as it stands and the new edits are stored from then on: each edit's own save waits for
+  the one before it a second at most, and once a late write lands the list is saved again, so
+  the newest copy is written last (`tests/review-undo16.test.tsx`, N1, N1b). A known limit: a write that lands
   later still is written over, so edits only it carried leave the undo list (their files keep
   them) (`tests/review-undo14.test.tsx`, R2; `tests/review-undo15.test.tsx`, S1, S2).
 - A Bash command or MCP call that changed files and is still being recorded when a /clear or an

@@ -9,7 +9,10 @@
   call ran records neither, except that an MCP call the engine reports read-only, ended before
   the other, costs the other nothing; a denied call records nothing, and unlike a failed Bash
   command, an MCP call that errors or is interrupted is not recorded, so a partial write it made
-  is not undone (in the tests; not yet seen on a screen).
+  is not undone (in the tests; not yet seen on a screen). "Read-only" is the server's own word:
+  a read-only call that writes anyway has its write counted in the Bash command's change.
+- An undo of part of an edit is never taken as the change of a Bash command that starts while
+  the undo is still writing.
 - The type check passes whether or not the engine's tool result declarations are present.
 
 - The list is copied into the mod's store under the session's id after each recorded change and

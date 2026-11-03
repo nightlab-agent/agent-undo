@@ -109,3 +109,27 @@ test('review-undo17 X1b: the same, s2 edits c before a lands: the fresh save wri
   expect(files(w, 'changes:s2')).toEqual(['c.txt'])
   expect(files(w, 'changes:s1')).toEqual(['a.txt', 'b.txt'])
 })
+
+// X2 (kind 1, out of order). The /clear comes at 0.4 s, while b's save is still in its one-second wait for a's
+// held write: a is not passed by yet when mirrorEnding(s1) is queued, so a wait that reads the passed-by writes
+// at that moment misses it, the ending copy [a, b] is written once b's save is done, and a's write lands over it.
+const clearDuringWait = async ($: $T, w: W, lands: number) => {
+  await start($); await settle()
+  const h = hold(); w.holdStoreSet = { key: 'changes:s1', ...h }
+  const ea = edit($, 'a.txt', 'one', 'ONE'); await h.at
+  setTimeout(h.release, lands)
+  const eb = edit($, 'b.txt', 'x', 'y')
+  await new Promise<void>(r => setTimeout(r, 400))
+  await endTo($, w, 'clear', 's2')
+  await ea; await eb; await new Promise<void>(r => setTimeout(r, 500)); await settle(); await settle()
+}
+test('review-undo17 X2: a /clear during b\'s wait, a\'s write lands at 1.3 s: s1\'s copy holds a and b', { timeoutMs: 9000 }, async ($, on) => {
+  const w = world(on, all)
+  await clearDuringWait($, w, 1300)
+  expect(files(w, 'changes:s1')).toEqual(['a.txt', 'b.txt'])
+})
+test('review-undo17 X2 comparison: the same /clear, a\'s write lands at 0.2 s: s1\'s copy holds a and b', { timeoutMs: 9000 }, async ($, on) => {
+  const w = world(on, all)
+  await clearDuringWait($, w, 200)
+  expect(files(w, 'changes:s1')).toEqual(['a.txt', 'b.txt'])
+})

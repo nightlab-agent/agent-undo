@@ -48,8 +48,10 @@ function after($: EngineInterface, prev: Promise<unknown>): Promise<unknown> {
   })
 }
 const enqueue = (p: Promise<unknown>) => { saving = p; void p.then(() => settled.add(p)); return p }
-// The queue and every write it passed by.
-const whole = () => Promise.all([saving, ...passed])
+// The queue, then every write it passed by: read once the queue settles, since a save still in its wait adds
+// the write it passes when its second is up. Never waited for until `passed` is empty: a later save may pass
+// the waiting write itself.
+const whole = () => saving.then(() => Promise.all([...passed]))
 
 /** Writes the session's list to the store as it stands now; a failure only leaves no copy. */
 export function mirror($: EngineInterface): Promise<void> {

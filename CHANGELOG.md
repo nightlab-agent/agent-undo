@@ -30,10 +30,11 @@
   read as it stands and the new edits are stored from then on: each edit's own save waits for
   the one before it a second at most, and once a late write lands the list is saved again, so
   the newest copy is written last (`tests/review-undo16.test.tsx`, N1, N1b); a /clear before it
-  lands still leaves the ending conversation's copy whole (`tests/review-undo17.test.tsx`, X1,
-  X1b; `tests/review-undo17ts.test.tsx`, T1). A known limit: a write that lands later still is
-  written over, so edits only it carried leave the undo list (their files keep them)
-  (`tests/review-undo14.test.tsx`, R2; `tests/review-undo15.test.tsx`, S1, S2).
+  lands, even one in that second, still leaves the ending conversation's copy whole
+  (`tests/review-undo17.test.tsx`, X1, X1b, X2; `tests/review-undo17ts.test.tsx`, T1). A known
+  limit: a write that lands later still is written over, so edits only it carried leave the undo
+  list (their files keep them) (`tests/review-undo14.test.tsx`, R2;
+  `tests/review-undo15.test.tsx`, S1, S2).
 - A Bash command or MCP call that changed files and is still being recorded when a /clear or an
   exit comes is waited for too, under the same second (`tests/review-undo15ts.test.tsx`, B1).
 - A /clear and a /resume back (or a /resume to another conversation) while the stored list was

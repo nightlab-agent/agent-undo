@@ -69,11 +69,23 @@ async function put($: EngineInterface, id: string, key: string, value: unknown) 
   }
 }
 
-async function save($: EngineInterface) {
-  const id = await $.session.id()
-  // Until this session's stored copy was read, writing would put a shorter list over it.
+/** At a /clear or /resume: the ending conversation's list, read in session.end (before the engine's end step
+ * swaps it; the engine's own example saves there, claude-code.d.ts 'session.end'), is written as its copy
+ * after the saves already queued. */
+export async function mirrorEnding($: EngineInterface, id: string): Promise<void> {
   if (restored !== id) return
-  const list = await read($, changes)
+  const ending = { id, list: await read($, changes) }
+  saving = saving.then(() => save($, ending)).catch(() => undefined)
+}
+
+async function save($: EngineInterface, ending?: { id: string; list: Change[] }) {
+  const id = ending?.id ?? await $.session.id()
+  // Until this session's stored copy was read, writing would put a shorter list over it.
+  if (!ending && restored !== id) return
+  const list = ending?.list ?? await read($, changes)
+  // A /clear or /resume during that read (forgetRestore) left the next conversation's list there: the
+  // ending one's copy is mirrorEnding's, queued after this, so this writes nothing.
+  if (!ending && restored !== id) return
   try {
     await put($, id, atOf(id), Date.now())
     await put($, id, keyOf(id), { shape: SHAPE, list })

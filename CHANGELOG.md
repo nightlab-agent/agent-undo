@@ -24,6 +24,10 @@
   finds its stored entries already listed counts as done, stored entries numbered below every
   listed one are put back in front of them, and one that gives up is tried again at the next
   read (X2, X2b, X3).
+- A /clear while an edit was still being stored no longer writes the new conversation's list as the
+  old one's stored copy: the old list is taken when the conversation ends, before the switch, so a
+  later `claude --resume` of it lists every edit (`tests/review-undo10.test.tsx`, P1, P1b, P1c; not
+  seen on a screen, a /clear cannot be timed there).
 
 ## 0.2.1 - 2026-11-03
 - Seen on a screen: two writes by an MCP tool listed, one undone, the other kept (README picture;

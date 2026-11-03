@@ -11,10 +11,14 @@
   makes "a new session ID instead of reusing the original", code.claude.com/docs/en/cli-reference); the list coming back
   after a resume is not yet seen on a screen. A new session, in a preview, starts empty.
 - The stored copy: a read refused once is tried again, and no copy is written until the stored
-  one was read, so a shorter list never replaces it; older sessions are cleared before the new
-  copy is written, so a full store still keeps the newest; only sessions the store's list of saved
-  sessions names are cleared, and that list is read again before it is written, so a save by
-  another process during this one's save keeps its copy (tested for one timing).
+  one was read and taken as the list, so a shorter list never replaces it. If the store refused
+  both reads and edits were listed meanwhile, the stored copy is kept as it was and those later
+  edits are not stored (merging would change numbers already shown). Each copy carries its own
+  write time and there is no shared list of saved sessions: the 5 newest copies are kept, and a
+  copy the store refuses (4 MiB in all) clears the oldest other copy and is tried once more, then
+  is not stored. A /clear while the earlier session's copy is still being read stores only the
+  new session. In the tests, a save by another process in the middle of this one keeps its copy
+  (two timings).
 
 ## 0.2.0 (2026-11-02)
 

@@ -152,12 +152,12 @@ const resumeDuringSlowWrite = async ($: $T, w: W, lands: number) => {
   setTimeout(h.release, lands)
   await eb; await ec; await settle(); await settle()
 }
-test('review-undo14 R2: /clear and /resume back, the copy write lands at 1.3 s, s1\'s store still holds b.txt', async ($, on) => {
+// The design choice (common.tsx restore()): past the second the copy is read as it stands and this conversation's
+// edits are stored from then on; b, carried only by the write that lands late, leaves the undo list (its file keeps it).
+test('review-undo14 R2 (design choice): /clear and /resume back, the copy write lands at 1.3 s: the copy ends [a, c]', async ($, on) => {
   const w = world(on, all)
   await resumeDuringSlowWrite($, w, 1300)
-  // The invariant any fix keeps: an edit that reached the store is not written over by a shorter list. (07c0415's
-  // own promise, the list and the copy both [a, b, c], is what the comparison holds; here the copy ends [a, c].)
-  expect(files(w, 'changes:s1')).toContain('b.txt')
+  expect(files(w, 'changes:s1')).toEqual(['a.txt', 'c.txt'])
 })
 test('review-undo14 R2 comparison: the copy write lands at 0.3 s, s1 lists and stores b.txt', async ($, on) => {
   const w = world(on, all)

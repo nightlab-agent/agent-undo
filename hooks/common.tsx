@@ -101,8 +101,8 @@ const quiet = async (records: boolean) => { for (;;) { await still(); if (!recor
 let recording = 0
 let idle = Promise.resolve()
 let idleDone = () => {}
-const beginRecord = () => { if (recording++ === 0) idle = new Promise<void>(r => { idleDone = r }) }
-const endRecord = () => { if (--recording === 0) idleDone() }
+export const beginRecord = () => { if (recording++ === 0) idle = new Promise<void>(r => { idleDone = r }) }
+export const endRecord = () => { if (--recording === 0) idleDone() }
 
 // A save queued during the wait (an edit landing while the conversation ends) replaces `saving`: this settles when
 // the queue stands still.
@@ -174,18 +174,16 @@ export async function restoreList($: EngineInterface): Promise<void> {
 
 /** `may`: this process may write the session's copy (none was stored, or all of it is now in the list);
  * `grew`: stored entries went in before entries already listed, so the copy lacks those. */
-let late: { id: string; still: boolean } | undefined
-
 async function restore($: EngineInterface, id: string): Promise<{ may: boolean; grew: boolean }> {
   const yes = { may: true, grew: false }, no = { may: false, grew: false }
   if ((await read($, listed)) === id) return yes
   // A save of this id's copy still queued (a /clear and a /resume back in the same window) lands before the read,
   // a second at most: this runs in the queue every Edit and Write waits in, so a write that never lands holds none.
-  // Past the second the copy may be older than that write: it is not read and this process does not write it.
-  // Later reads do not wait again; they look once the queue stands still. The trade: a write that hangs costs one
-  // second once, and until a late one lands this conversation's new edits stay out of its copy.
-  if (late?.id === id) { if (!late.still) return no; late = undefined }
-  else if (!(await saved($, 1000))) { const l = { id, still: false as boolean }; late = l; void still().then(() => { l.still = true }); return no }
+  // A design choice: past the second the copy is read as it stands, and this conversation's edits are stored from
+  // then on. A write that lands later (the store held over a second) is then written over, so the edits only it
+  // carried leave the undo list; their files keep them. Waiting for it instead kept every later edit out of the copy
+  // and the copy refused for colliding numbers once it landed (tests/review-undo15.test.tsx).
+  await saved($, 1000)
   // One more try for a read refused once (the file busy); a second refusal leaves no copy written.
   const got = await $.store.get(keyOf(id)).catch(() => $.store.get(keyOf(id)))
   if (!got || typeof got !== 'object') return yes

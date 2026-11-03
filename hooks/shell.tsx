@@ -1,7 +1,7 @@
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Change, ShellFile } from '../types'
-import { fileKey, forgetRestore, inFlight, mirrorEnding, record, saved, slashed, time, touched, updateList, windows } from './common'
+import { beginRecord, endRecord, fileKey, forgetRestore, inFlight, mirrorEnding, record, saved, slashed, time, touched, updateList, windows } from './common'
 
 // The session's list is changed only through common.tsx (updateList), which mirrors it to the store.
 
@@ -264,6 +264,8 @@ async function around<D extends Done>($: EngineInterface, rawId: unknown, agent:
     try { $.ui.status('agent-undo: shell commands no longer recorded (one runs in the background) · /agent-undo') } catch {}
   }
   if (!sh) return done
+  // From the tool result to record()'s list update the call counts as an edit on its way (the end's wait).
+  beginRecord()
   try {
     // A failed command may still have changed files and is recorded; an MCP tool that answered an error is not.
     if (done.deny !== undefined || stopped || (tool === 'MCP' && done.isError)) return done
@@ -285,6 +287,7 @@ async function around<D extends Done>($: EngineInterface, rawId: unknown, agent:
     // A failure of this mod never changes the call.
   } finally {
     end(sh)
+    endRecord()
   }
   return done
 }

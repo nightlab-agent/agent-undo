@@ -313,7 +313,7 @@ export const registerShell = (on: Parameters<Register>[0]) => {
       forgetRestore()
     }
     // The last edit's copy (and the ending list's) lands before the end step, within the chain's short bound.
-    try { await saved($, Math.min(1000, next.budget.remainingMs - 250), next.signal) } catch {}
+    try { await saved($, Math.min(1000, next.budget.remainingMs - 250), next.signal, true) } catch {}
     // The status line names this conversation's newest change; after a /clear it is not the next one's.
     try { $.ui.status(undefined) } catch {}
     return next(e)

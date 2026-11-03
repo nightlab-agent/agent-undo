@@ -83,7 +83,7 @@ export async function mirrorEnding($: EngineInterface, id: string): Promise<void
 
 /** Waits for the queued saves, at most `ms` (the engine's own example saves in session.end before its end step);
  * true when the queue stood still before the bound. */
-export async function saved($: EngineInterface, ms: number, signal?: AbortSignal): Promise<boolean> {
+export async function saved($: EngineInterface, ms: number, signal?: AbortSignal, records = false): Promise<boolean> {
   if (!(ms > 0) || signal?.aborted) return false
   // Ends at the bound or at the chain's abort. The engine's declarations type no timer but $.clock's (and a hot
   // reload cancels only those), so a sleep refused for another reason (a mod above denies it) leaves the abort
@@ -92,8 +92,17 @@ export async function saved($: EngineInterface, ms: number, signal?: AbortSignal
     signal?.addEventListener('abort', () => done(), { once: true })
     if (Number.isFinite(ms)) $.clock.sleep(ms, { signal }).then(done, () => { if (!signal || signal.aborted) done() })
   })
-  return Promise.race([still().then(() => true), bound.then(() => false)])
+  return Promise.race([quiet(records).then(() => true), bound.then(() => false)])
 }
+
+// With `records`, also the edits between their tool result and their mirror() (the end's wait; never restore's,
+// which runs inside one and would wait for itself).
+const quiet = async (records: boolean) => { for (;;) { await still(); if (!records || recording === 0) return; await idle } }
+let recording = 0
+let idle = Promise.resolve()
+let idleDone = () => {}
+const beginRecord = () => { if (recording++ === 0) idle = new Promise<void>(r => { idleDone = r }) }
+const endRecord = () => { if (--recording === 0) idleDone() }
 
 // A save queued during the wait (an edit landing while the conversation ends) replaces `saving`: this settles when
 // the queue stands still.
@@ -250,9 +259,14 @@ function scrub($: EngineInterface, owner: string, keys: Set<string>): Promise<vo
 
 /** Changes the session's list, then mirrors it to the store. */
 export async function updateList($: EngineInterface, f: (list: readonly Change[]) => Change[]) {
-  await restoreList($)
-  await update($, changes, f)
-  await mirror($)
+  beginRecord()
+  let p: Promise<void> | undefined
+  try {
+    await restoreList($)
+    await update($, changes, f)
+    p = mirror($)
+  } finally { endRecord() }
+  await p
 }
 
 export const time = (iso: string) => {

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Git commands that throw away uncommitted work (`checkout --`, `restore`, `reset --hard`,
+  `clean -fd`, `stash -u`), run by Claude as a Bash command, are undone like any other command:
+  a new test, `tests/git-wipe.sh`, runs them against real git with the mod's git calls and is
+  part of `tests/release.sh`. `clean -fdx` deletes ignored files, which are never recorded.
 - MCP tools: in a git repo, a call to any `mcp__*` tool (other than agent-undo's own) that ran
   without a question is recorded the way a Bash command is, listed as `MCP <server> <tool>` with
   its files, and undone with the same shell undo (a file changed since is refused, a new file is

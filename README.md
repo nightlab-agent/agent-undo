@@ -92,6 +92,11 @@ there: not yet seen on a screen.)
   your uncommitted changes included. It is put back only if it still reads
   exactly as the command left it (or, if the command deleted it, nothing is
   there yet). Otherwise it says so and changes nothing.
+- That includes a git command Claude ran that threw away your uncommitted
+  work: `git checkout -- .`, `git restore .`, `git reset --hard`,
+  `git clean -fd` or `git stash -u` (tested with the same git calls against
+  real git, `tests/git-wipe.sh`; not yet seen on a screen). Files git
+  ignores are never recorded, so what `git clean -fdx` deletes stays gone.
 - A file the command created is listed, never deleted. A file in a
   submodule, a symbolic link, or a command that changed more than 200 files
   is listed but cannot be undone here.

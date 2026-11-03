@@ -186,6 +186,76 @@ export async function undoShell($: EngineInterface, c: Change, h: number | undef
   return [`agent-undo: ${did}.`, ...notes].join('\n')
 }
 
+type Verdict = { decision: string }
+type Done = { deny?: unknown; isError?: unknown; result?: unknown }
+
+/** The engine's decision for one wrapped call: an "allow" with no question first takes the before-snapshot. */
+async function checked<V extends Verdict>($: EngineInterface, id: unknown, verdict: V): Promise<V> {
+  try {
+    // The first decision for a call stands: a later "allow" for a call that was asked about (the
+    // question answered) or already snapshotted starts nothing.
+    if (typeof id === 'string' && verdict.decision !== 'allow') asked.add(id)
+    if (verdict.decision === 'allow' && typeof id === 'string' && !pending.has(id) && !asked.has(id)) {
+      const sh = await begin($, id)
+      if (sh) pending.set(id, sh)
+    }
+  } catch {
+    // A failure of this mod never changes the verdict.
+  }
+  return verdict
+}
+
+/** One wrapped call: run it, then snapshot again and record the files that differ, as `tool` named `label`. */
+async function around<D extends Done>($: EngineInterface, rawId: unknown, agent: string | undefined, tool: 'Bash',
+  label: string, call: () => Promise<D>): Promise<D> {
+  const id = typeof rawId === 'string' ? rawId : undefined
+  // Only a call this hook wraps gets a snapshot (its check runs inside the call); while it runs,
+  // every other open window is overlapped.
+  if (id) {
+    running.add(id)
+    for (const o of shells) if (o.id !== id) o.overlapped = true
+  }
+  let done: D
+  try {
+    done = await call()
+  } catch (err) {
+    if (id) running.delete(id)
+    const sh = take(id)
+    if (sh) end(sh)
+    throw err
+  }
+  if (id) running.delete(id)
+  const sh = take(id)
+  // Any command that goes on in the background, recorded or not (one approved at a prompt too),
+  // could write into a later command's window.
+  if (done.deny === undefined && (done.result as { backgroundTaskId?: unknown } | undefined)?.backgroundTaskId !== undefined && !stopped) {
+    stopped = `a command went on in the background at ${time(new Date().toISOString())}, and its later writes would land in any later record`
+    try { $.ui.status('agent-undo: shell commands no longer recorded (one runs in the background) · /agent-undo') } catch {}
+  }
+  if (!sh) return done
+  try {
+    if (done.deny !== undefined || stopped) return done
+    const after = await snapshot(sh.repo, $)
+    if (sh.overlapped) {
+      $.ui.status('agent-undo: two shell commands ran at once; neither recorded · /agent-undo')
+      return done
+    }
+    if (after === sh.before) return done
+    const all = filesOf(await git($, ['diff-tree', '-r', '-z', '--no-renames', sh.before, after], sh.repo.top))
+    const files = all.filter(f => !sh.mine.has(fileKey(spelled(sh.repo, f.path))))
+    if (files.length === 0) return done
+    await record($, {
+      at: new Date().toISOString(), tool, file: label,
+      agent, hunks: [], top: sh.repo.top, root: sh.repo.root, prefix: sh.repo.prefix, tree: sh.before, files,
+    })
+  } catch {
+    // A failure of this mod never changes the call.
+  } finally {
+    end(sh)
+  }
+  return done
+}
+
 /** A new conversation (a start, or the process going on after /clear) starts with no shell state. */
 export const resetShells = () => {
   stopped = undefined
@@ -205,70 +275,9 @@ export const registerShell = (on: Parameters<Register>[0]) => {
     return next(e)
   })
 
-  on('tool.check', { tool: 'Bash' }, async ($, e, next) => {
-    const verdict = await next(e)
-    try {
-      // The first decision for a call stands: a later "allow" for a call that was asked about (the
-      // question answered) or already snapshotted starts nothing.
-      const id = e.tool_use_id
-      if (typeof id === 'string' && verdict.decision !== 'allow') asked.add(id)
-      if (verdict.decision === 'allow' && typeof id === 'string' && !pending.has(id) && !asked.has(id)) {
-        const sh = await begin($, id)
-        if (sh) pending.set(id, sh)
-      }
-    } catch {
-      // A failure of this mod never changes the verdict.
-    }
-    return verdict
-  })
+  on('tool.check', { tool: 'Bash' }, async ($, e, next) => checked($, e.tool_use_id, await next(e)))
 
-  on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
-    const id = typeof e.tool_use_id === 'string' ? e.tool_use_id : undefined
-    // Only a call this hook wraps gets a snapshot (its check runs inside next(e)); while it runs,
-    // every other shell's window is overlapped.
-    if (id) {
-      running.add(id)
-      for (const o of shells) if (o.id !== id) o.overlapped = true
-    }
-    let done
-    try {
-      done = await next(e)
-    } catch (err) {
-      if (id) running.delete(id)
-      const sh = take(id)
-      if (sh) end(sh)
-      throw err
-    }
-    if (id) running.delete(id)
-    const sh = take(id)
-    // Any command that goes on in the background, recorded or not (one approved at a prompt too),
-    // could write into a later command's window.
-    if (done.deny === undefined && (done.result as { backgroundTaskId?: unknown } | undefined)?.backgroundTaskId !== undefined && !stopped) {
-      stopped = `a command went on in the background at ${time(new Date().toISOString())}, and its later writes would land in any later record`
-      try { $.ui.status('agent-undo: shell commands no longer recorded (one runs in the background) · /agent-undo') } catch {}
-    }
-    if (!sh) return done
-    try {
-      if (done.deny !== undefined || stopped) return done
-      const after = await snapshot(sh.repo, $)
-      if (sh.overlapped) {
-        $.ui.status('agent-undo: two shell commands ran at once; neither recorded · /agent-undo')
-        return done
-      }
-      if (after === sh.before) return done
-      const all = filesOf(await git($, ['diff-tree', '-r', '-z', '--no-renames', sh.before, after], sh.repo.top))
-      const files = all.filter(f => !sh.mine.has(fileKey(spelled(sh.repo, f.path))))
-      if (files.length === 0) return done
-      await record($, {
-        at: new Date().toISOString(), tool: 'Bash', file: commandLabel((e as { command?: unknown }).command),
-        agent: e.agentId, hunks: [], top: sh.repo.top, root: sh.repo.root, prefix: sh.repo.prefix, tree: sh.before, files,
-      })
-    } catch {
-      // A failure of this mod never changes the command.
-    } finally {
-      end(sh)
-    }
-    return done
-  })
+  on('tool.call', { tool: 'Bash' }, async ($, e, next) =>
+    around($, e.tool_use_id, e.agentId, 'Bash', commandLabel((e as { command?: unknown }).command), () => next(e)))
 
 }

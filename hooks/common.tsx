@@ -35,7 +35,8 @@ export function mirror($: EngineInterface): Promise<void> {
   return p
 }
 
-/** Every stored session id with its write time, oldest first (a copy with no time counts as oldest). */
+/** Every stored session id with its write time, oldest first. A copy with no time counts as oldest; a time
+ * read refused twice (the file busy) counts as newest, so a copy that could not be read is never the one evicted. */
 async function copies($: EngineInterface): Promise<{ id: string; at: number }[]> {
   const ids = new Set<string>()
   for (const k of await $.store.keys()) {
@@ -44,8 +45,9 @@ async function copies($: EngineInterface): Promise<{ id: string; at: number }[]>
   }
   const out: { id: string; at: number }[] = []
   for (const id of ids) {
-    const at = await $.store.get(atOf(id)).catch(() => undefined)
-    out.push({ id, at: typeof at === 'number' ? at : 0 })
+    const busy = Symbol('busy')
+    const at = await $.store.get(atOf(id)).catch(() => $.store.get(atOf(id))).catch(() => busy)
+    out.push({ id, at: at === busy ? Number.MAX_SAFE_INTEGER : typeof at === 'number' ? at : 0 })
   }
   return out.sort((a, b) => a.at - b.at)
 }

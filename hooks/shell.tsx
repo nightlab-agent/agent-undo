@@ -138,6 +138,18 @@ const take = (id: unknown) => {
   return sh
 }
 
+/** agent-undo's own model tool (`mcp__<plugin>__<name>`): its undo is not a change to record. */
+const OWN = 'mcp__agent-undo__'
+/** An MCP tool's call, by its wire name, that is not this mod's own. */
+const isMcp = (tool: unknown): tool is string => typeof tool === 'string' && tool.startsWith('mcp__') && !tool.startsWith(OWN)
+/** `mcp__filesystem__write_file` as `filesystem write_file`: one line, at most 60 characters. */
+export const mcpLabel = (tool: string) => {
+  const rest = tool.slice('mcp__'.length)
+  const k = rest.indexOf('__')
+  const name = (k < 0 ? rest : `${rest.slice(0, k)} ${rest.slice(k + 2)}`).replace(/[\u0000-\u001f\u007f]/g, ' ')
+  return name.length > 60 ? `${name.slice(0, 59)}…` : name
+}
+
 const commandLabel = (command: unknown) => {
   const first = String(command ?? '').trim().split('\n')[0] ?? ''
   return first.length > 60 ? `${first.slice(0, 59)}…` : first
@@ -234,7 +246,8 @@ async function around<D extends Done>($: EngineInterface, rawId: unknown, agent:
   }
   if (!sh) return done
   try {
-    if (done.deny !== undefined || stopped) return done
+    // A failed command may still have changed files and is recorded; an MCP tool that answered an error is not.
+    if (done.deny !== undefined || stopped || (tool === 'MCP' && done.isError)) return done
     const after = await snapshot(sh.repo, $)
     if (sh.overlapped) {
       $.ui.status(`agent-undo: two ${tool === 'MCP' ? 'tool calls' : 'shell commands'} ran at once; neither recorded · /agent-undo`)
@@ -279,5 +292,13 @@ export const registerShell = (on: Parameters<Register>[0]) => {
 
   on('tool.call', { tool: 'Bash' }, async ($, e, next) =>
     around($, e.tool_use_id, e.agentId, 'Bash', commandLabel((e as { command?: unknown }).command), () => next(e)))
+
+  // MCP tools write files Claude Code's checkpoints do not track: each call is recorded as a Bash
+  // command is, sharing its windows (a call beside a command or another call is not recorded).
+  // Every other tool passes straight on, untouched.
+  on('tool.check', async ($, e, next) => (isMcp(e.tool) ? checked($, e.tool_use_id, await next(e)) : next(e)))
+
+  on('tool.call', async ($, e, next) =>
+    isMcp(e.tool) ? around($, e.tool_use_id, e.agentId, 'MCP', mcpLabel(e.tool), () => next(e)) : next(e))
 
 }

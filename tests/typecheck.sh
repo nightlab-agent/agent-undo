@@ -34,7 +34,7 @@ else
   echo "  or set TSC to a tsc executable."
   exit 1
 fi
-files=$(ls hooks/*.ts hooks/*.tsx types/*.d.ts 2>/dev/null || true)
+files=$(ls hooks/*.ts hooks/*.tsx tests/*.ts tests/*.tsx types/*.d.ts 2>/dev/null || true)
 echo "$files" | grep '^hooks/' | grep -v -E '\.test\.tsx?$|\.d\.ts$' | grep -q . || { echo "typecheck: FAIL, no hooks module (hooks/*.ts or *.tsx other than tests and .d.ts) to check"; exit 1; }
 # Claude Code lays a tsconfig.json beside a loaded mod (git ignores it); tsc 6 and later refuse to run with
 # files on the command line while one is present, so an untracked one is told to be ignored (tsc 5 ignores it

@@ -95,7 +95,7 @@ test('review2 R3 comparison: after a /clear with no background command, shell co
 // says yes, after `person` acts (the question waiting), as a person or a host would.
 // The world answers the question (classic.PermissionRequest) with the person's act, then yes.
 const approving = (_on: unknown, person: { act?: () => void | Promise<void> } = {}) => person
-const acts = (repo: { person?: (f: Map<string, string>) => void | Promise<void> }, p: { act?: () => void | Promise<void> }) => {
+const acts = (repo: { person?: (f: Map<string, string>) => unknown }, p: { act?: () => void | Promise<void> }) => {
   repo.person = async () => { await p.act?.() }
 }
 

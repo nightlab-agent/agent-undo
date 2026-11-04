@@ -20,7 +20,7 @@ export const blob = (t: string) => {
   return h.toString(16).padStart(8, '0').repeat(5)
 }
 
-export type Script = (f: Map<string, string>) => void | Promise<void>
+export type Script = (f: Map<string, string>) => unknown
 export type Repo = {
   files: Map<string, string>
   runs: string[][]
@@ -50,8 +50,8 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
   const trees = new Map<string, Map<string, string>>()
   const rel = (p: string) => p.slice(ROOT.length + 1)
   const real = (p: string) => (p.startsWith(`${top}/`) ? `${ROOT}/${p.slice(top.length + 1)}` : p)
-  const ok = (stdout = '') => ({ value: { exitCode: 0, stdout, stderr: '' } })
-  const fail = (stderr: string) => ({ value: { exitCode: 128, stdout: '', stderr } })
+  const ok = (stdout = '') => ({ value: { exitCode: 0, stdout, stderr: '' } as never })
+  const fail = (stderr: string) => ({ value: { exitCode: 128, stdout: '', stderr } as never })
   on('session.root', () => ({ value: ROOT }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('command.register', () => ({ value: { command: 'agent-undo' } }))

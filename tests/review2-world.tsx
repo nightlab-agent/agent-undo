@@ -17,8 +17,8 @@ export const world2 = (on: On, o: { root: string; gitTop: string; prefix: string
     for (const t of o.tops) if (p.startsWith(`${t}/${prefix}`)) return `${root}/${p.slice(t.length + 1 + prefix.length)}`
     return p
   }
-  const ok = (stdout = '') => ({ value: { exitCode: 0, stdout, stderr: '' } })
-  const fail = (stderr: string) => ({ value: { exitCode: 128, stdout: '', stderr } })
+  const ok = (stdout = '') => ({ value: { exitCode: 0, stdout, stderr: '' } as never })
+  const fail = (stderr: string) => ({ value: { exitCode: 128, stdout: '', stderr } as never })
   on('session.root', () => ({ value: root }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('command.register', () => ({ value: { command: 'agent-undo' } }))

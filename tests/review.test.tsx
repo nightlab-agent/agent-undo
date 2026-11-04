@@ -45,7 +45,7 @@ const world = (on: On, files0: Record<string, string> = {}, o: Opts = {}) => {
   on('session.root', () => ({ value: o.root ?? ROOT }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('command.register', () => ({ value: { command: 'agent-undo' } }))
-  on('tool.register', () => ({ value: undefined }))
+  on('tool.register', () => ({ value: undefined as never }))
   on('fs.exists', (_, e) => ({ value: files.has(e.path) }))
   on('fs.read', async (_, e) => {
     const t = files.get(e.path)

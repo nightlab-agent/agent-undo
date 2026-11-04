@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- The npm description fits the registry's 255 characters; it was cut in the middle of a word.
 - A stored copy that needs more room than one other conversation's copy now takes as many of the
   oldest copies as it needs, and no more; before, one went, the store still refused, and a /resume
   from a new process could not find this conversation's list (`tests/review-store-room.test.tsx`,

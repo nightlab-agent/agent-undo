@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+- A stored copy that needs more room than one other conversation's copy now takes as many of the
+  oldest copies as it needs, and no more; before, one went, the store still refused, and a /resume
+  from a new process could not find this conversation's list (`tests/review-store-room.test.tsx`,
+  `tests/review4-resume.test.tsx`; not seen on a screen).
+- Undo marks now count toward the list's size limit, so a fifth undo of very large edits is
+  listed instead of refused after the file was already back (`tests/review-store-room.test.tsx`,
+  not seen on a screen).
+
 ## 0.2.2 - 2026-11-03
 - The list stays under the 4 MiB Claude Code allows it, dropping the oldest entries first; an
   edit that alone would fill it is listed as too large. Before, once big edits took the list past

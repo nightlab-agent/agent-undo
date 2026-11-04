@@ -117,7 +117,7 @@ async function over($: EngineInterface, key: string, value: unknown): Promise<bo
 /** Sets `key`. A refusal is tried once more as it is: claude-code.d.ts names three refusals for store.set (a
  * function, a cycle, the 4 MiB cap), and a refusal it does not name (a mod above that refuses it, a file the
  * system holds) is not room to make either. Refused twice, the oldest other session's copy goes only when the
- * store is measured full, and it is tried once more. */
+ * store is measured full, then the next oldest, until the value fits. */
 async function put($: EngineInterface, id: string, key: string, value: unknown) {
   try {
     await $.store.set(key, value)
@@ -129,10 +129,14 @@ async function put($: EngineInterface, id: string, key: string, value: unknown) 
   } catch (e) {
     if (!(await over($, key, value))) throw e
   }
-  const oldest = (await copies($)).find(c => c.id !== id)
-  if (!oldest) throw new Error('store full')
-  await drop($, oldest.id)
-  await $.store.set(key, value)
+  const others = (await copies($)).filter(c => c.id !== id)
+  for (const oldest of others) {
+    await drop($, oldest.id)
+    if (await over($, key, value)) continue
+    await $.store.set(key, value)
+    return
+  }
+  throw new Error('store full')
 }
 
 /** At a /clear or /resume: the ending conversation's list, read in session.end (before the engine's end step
@@ -340,7 +344,7 @@ export async function updateList($: EngineInterface, f: (list: readonly Change[]
   let p: Promise<void> | undefined
   try {
     await restoreList($)
-    await update($, changes, f)
+    await update($, changes, list => fit(f(list)))
     p = mirror($)
   } finally { endRecord() }
   // Its own write waited for a second at most, as a save waits for the one before it: the undo and the Edit
@@ -368,7 +372,7 @@ export async function record($: EngineInterface, c: Omit<Change, 'n'>) {
   const kept = big ? { ...c, hunks: [], files: c.files && [], tooLarge: true } : c
   await updateList($, list => {
     const n = list.reduce((m, x) => Math.max(m, x.n), 0) + 1
-    return fit([...list, { ...kept, n }])
+    return [...list, { ...kept, n }]
   })
   await showNewest($)
 }

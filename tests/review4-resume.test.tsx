@@ -275,13 +275,13 @@ test('review4 R2 a step later: two /clears while two restores are in flight, onl
   expect(files(w, 'changes:s1')).toEqual(['a.txt'])
 })
 
-test('review4 R4 a step later: a copy larger than any one old copy is refused after one eviction, and only one goes', async ($, on) => {
+test('review4 R4 a step later: a copy larger than any one old copy takes as many old copies as it needs, and no more', async ($, on) => {
   const w = world(on, { 'big.txt': 'one\n' }, { limit: true })
   full(w, 4)
   w.files.set(`${ROOT}/big.txt`, 'one ' + 'q'.repeat(1_500_000) + '\n')
   await restart($, w, 'n1')
   await edit($, 'big.txt', 'one', 'ONE')
-  expect(w.disk.has('changes:n1')).toBe(false)
-  expect(w.disk.has('at:n1')).toBe(false)
-  expect([1, 2, 3, 4].filter(i => w.disk.has(`changes:old${i}`)).length).toBe(3)
+  expect(w.disk.has('changes:n1')).toBe(true)
+  expect(w.disk.has('at:n1')).toBe(true)
+  expect([1, 2, 3, 4].filter(i => w.disk.has(`changes:old${i}`))).toEqual([4])
 })

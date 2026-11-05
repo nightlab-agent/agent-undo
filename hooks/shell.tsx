@@ -103,7 +103,7 @@ let snaps: Promise<unknown> = Promise.resolve()
 let lastIndex: string | undefined
 // Each git call ends at its own timeout, so this bound is for one that never comes back: the queue goes on without it.
 const HOLD_MS = 180000
-export const onIndex = <T,>($: EngineInterface, f: () => Promise<T>): Promise<T> => {
+export function onIndex<T>($: EngineInterface, f: () => Promise<T>): Promise<T> {
   const p = snaps.then(f)
   snaps = snaps.then(async () => {
     const stop = new AbortController()

@@ -1,3 +1,4 @@
+import { stopped } from './shared'
 import type { EngineInterface } from 'claude-code'
 
 import type { Change, ShellFile } from '../types'
@@ -125,7 +126,8 @@ export async function undoShell($: EngineInterface, c: Change, h: number | undef
     if (f.undone) { notes.push(`${ref} was already undone`); continue }
     if (f.fixed) { notes.push(`${ref} left as is: ${name} is ${f.fixed}`); continue }
     if (f.status === 'A') { notes.push(`${ref} left as is: ${name} is a new file; nothing was there before. Delete it yourself if you want it gone.`); continue }
-    if (turn.why) { notes.push(`${ref} left as is: ${leftBecause[turn.why]}`); continue }
+    const why = stopped(turn)
+    if (why) { notes.push(`${ref} left as is: ${leftBecause[why]}`); continue }
     let restoring = false
     try {
       // On the private index: the person's own git may hold the real one's lock.
@@ -137,7 +139,8 @@ export async function undoShell($: EngineInterface, c: Change, h: number | undef
         const had = f.status === 'D' ? { bits: undefined, x: undefined } : await permissions($, c.top!, f.path)
         const why = await refusal($, c, f, name, shown, had)
         if (why !== undefined) return why
-        if (turn.why) return leftBecause[turn.why]
+        const stop = stopped(turn)
+        if (stop) return leftBecause[stop]
         // An open window (a Bash command or MCP call running now) must not take this undo as its change.
         touched(spelled(c, f.path))
         restoring = true

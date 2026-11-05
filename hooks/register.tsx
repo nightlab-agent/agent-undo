@@ -1,3 +1,4 @@
+import { stopped } from './shared'
 import { atom, read } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
@@ -94,7 +95,8 @@ async function putBack($: EngineInterface, file: string, real: string, was: stri
       return `could not be written (${firstLine(err)})`
     }
     if (await moved()) return changed
-    if (turn.why) return `stayed as it was: ${stoppedBy[turn.why]}`
+    const why = stopped(turn)
+    if (why) return `stayed as it was: ${stoppedBy[why]}`
     const mv = await run('mv', '-f', tmp, real)
     return mv.exitCode !== 0 ? `could not be put in place (${said(mv)})` : undefined
   } finally {

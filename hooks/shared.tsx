@@ -15,9 +15,19 @@ export const fileKey = (p: string) => slashed(p).replace(/\/{2,}/g, '/').replace
 // back no other file's. `keys` undefined waits for every queue and holds them all: an undo. `left` lets go of the queue
 // early, for a job that will not run: the jobs behind it then wait only for what they would have waited for without it.
 const tails = new Map<string, Promise<unknown>>()
+// When each file's waiting job began. A plain wait spends a hook's own time, so past its budget the engine runs that
+// Edit itself, beside whatever holds the queue: a slow undo must not write over it.
+const waiting = new Set<{ since: number }>()
+const OWN_TIME_MS = 8500
+export const overdue = () => [...waiting].some(w => Date.now() - w.since >= OWN_TIME_MS)
 let whole: Promise<unknown> = Promise.resolve()
 export const serial = <T,>(keys: readonly string[] | undefined, f: () => Promise<T>, left?: Promise<void>): Promise<T> => {
-  const p = Promise.allSettled(keys ? [whole, ...keys.map(k => tails.get(k))] : [whole, ...tails.values()]).then(f)
+  const wait = { since: Date.now() }
+  if (keys) waiting.add(wait)
+  const p = Promise.allSettled(keys ? [whole, ...keys.map(k => tails.get(k))] : [whole, ...tails.values()]).then(() => {
+    waiting.delete(wait)
+    return f()
+  })
   const settled = p.catch(() => undefined)
   // Leaving hands the queue to what stood ahead: a running undo is held only by this link.
   const ahead = whole
@@ -39,6 +49,11 @@ export const newTurn = (): Turn => {
   const over = new Promise<Why>(r => { answer = r })
   const turn: Turn = { over, say: why => { turn.why ??= why; answer(turn.why) } }
   return turn
+}
+/** Why this undo must not write now: what its turn says, or an Edit behind it about to go on without it. */
+export const stopped = (turn: Turn) => {
+  if (overdue()) turn.say('budget')
+  return turn.why
 }
 /** `job` in its queue, unless the turn goes first: then `late` answers at once and the job, still waiting, never runs and
  * leaves the queue. One that began is seen through, and looks at the turn itself before its last step. */

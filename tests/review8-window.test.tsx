@@ -3,6 +3,7 @@
 // review7-ts-gap.test.tsx (gate: the second id check waits; armed: a /clear lands at the first check).
 import { expect, test } from 'claude-code/testing'
 import type { TestBody } from 'claude-code/testing'
+import { tempTools } from './temp-tools'
 
 type On = Parameters<TestBody>[1]
 type $T = Parameters<TestBody>[0]
@@ -87,6 +88,7 @@ const world = (on: On, files0: Record<string, string>, o: Opts = {}) => {
     return { value: t }
   })
   on('fs.write', (_, e) => { files.set(e.path, e.text); return { value: undefined } })
+  tempTools(on, files)
   on('tool.call', (_, e) => {
     const x = e as unknown as { file_path: string; old_string: string; new_string: string }
     const was = files.get(x.file_path)!

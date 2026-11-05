@@ -161,8 +161,8 @@ came back as committed, and `notes.txt` stayed.
   file, so undo the one you mean (`3.1`, not `3`).
 - A folder you cannot write in is refused, even for a file you can write:
   there is no room for the temporary copy that keeps the file whole if an
-  undo is killed. Where `mktemp`, `cp` or `mv` is missing (a machine with no
-  Unix tools), an undo writes the file directly, without that protection.
+  undo is killed. So is every Edit or Write undo where `mktemp`, `cp` or `mv`
+  cannot run (a machine with no Unix tools): the undo says why and changes nothing.
 - With more sessions than the store keeps, one being saved at the very
   moment the oldest copy is dropped can lose its stored list until its next
   save. No file is touched.
@@ -190,9 +190,9 @@ came back as committed, and `notes.txt` stayed.
 - For an Edit or Write undo: the file that edit changed, with only that
   edit's hunk (or hunks) put back, through a short-lived `.agent-undo-*` file
   beside it and a rename, so an undo killed halfway leaves your file whole. A
-  killed undo can leave that file behind; delete it. Where `cp` or `mv` cannot
-  run (Windows without them) it is a plain write. The rename gives the file a
-  new inode, so a hard link to it keeps the old text.
+  killed undo can leave that file behind; delete it. Where `mktemp`, `cp` or `mv`
+  cannot run (Windows without them) the undo refuses; it never writes the file
+  in place. The rename gives the file a new inode, so a hard link to it keeps the old text.
 - In a git repo, around each Bash command: a private index file,
   `.git/agent-undo.index.<id>`, one per running session and removed when it
   exits (a killed session's is removed a week later by the next session), and

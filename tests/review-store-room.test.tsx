@@ -6,6 +6,7 @@
 // `fill:<n>`: an edit whose engine diff is n one-line insertions, so the entry has n hunks (n lines, under MAX_LINES).
 import { expect, test } from 'claude-code/testing'
 import type { TestBody } from 'claude-code/testing'
+import { tempTools } from './temp-tools'
 
 type On = Parameters<TestBody>[1]
 type $T = Parameters<TestBody>[0]
@@ -46,6 +47,7 @@ const world = (on: On, files0: Record<string, string>) => {
   on('fs.exists', (_, e) => ({ value: files.has(e.path) }))
   on('fs.read', (_, e) => { const t = files.get(e.path); if (t === undefined) throw new Error('ENOENT'); return { value: t } })
   on('fs.write', (_, e) => { files.set(e.path, e.text); return { value: undefined } })
+  tempTools(on, files)
   on('tool.call', (_, e) => {
     const x = e as unknown as { file_path: string; old_string: string; new_string: string }
     const was = files.get(x.file_path)!

@@ -2,6 +2,7 @@
 // (tests/engine.tsx). A test changes `files` itself where the person would save from their own editor.
 import type { TestBody } from 'claude-code/testing'
 import { editResult, writeResult } from './engine'
+import { tempTools } from './temp-tools'
 
 type On = Parameters<TestBody>[1]
 type $T = Parameters<TestBody>[0]
@@ -32,6 +33,7 @@ export const editWorld = (on: On, files0: Record<string, string> = {}, answer: A
     return { value: { base64: btoa(String.fromCharCode(...raw)) } } as never
   })
   on('fs.write', (_, e) => { files.set(e.path, e.text); return { value: undefined } })
+  tempTools(on, files)
   on('tool.call', (_, e) => {
     const x = e as unknown as { tool: string; file_path: string; old_string?: string; new_string?: string; content?: string; replace_all?: boolean }
     const was = files.get(x.file_path)

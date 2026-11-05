@@ -2,8 +2,9 @@
 
 ## Unreleased
 - The copy an undo writes has its own name, made fresh, so it can no longer overwrite a file already there or fail on
-  a long file name. If no copy can be made (a folder you cannot write in), the undo says so and changes nothing;
-  before, it fell back to the write that empties the file first (`tests/release-audit2.test.mjs`, real files).
+  a long file name. If no copy can be made (a folder you cannot write in, `mktemp`, `cp` or `mv` that cannot run), the
+  undo says so and changes nothing; before, it fell back to the write that empties the file first
+  (`tests/release-audit2.test.mjs`, real files).
 - An undo no longer lands on another file if a link replaces the file while the undo reads it
   (`tests/release-audit2.test.mjs`).
 - Where git ignores permissions (`core.filemode` false), a shell undo keeps an executable bit you set; `git restore`

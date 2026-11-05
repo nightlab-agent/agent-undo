@@ -63,32 +63,29 @@ async function reached($: EngineInterface, file: string) {
 /**
  * The file as `text`, in one step: a new temporary file beside it with its permissions, then a rename, so an undo killed
  * halfway leaves the file whole (`$.fs.write` empties it first). `real` is where the checks found it. The answer is why
- * the file stayed as it was, or undefined once it is done. With no `mktemp`, `cp` or `mv` on the machine, a plain write.
+ * the file stayed as it was, or undefined once it is done. There is no second way: `$.process.run` rejects alike for a
+ * machine without these tools, a command that could not start and one out of time, and a plain write killed halfway empties the file.
  */
 async function putBack($: EngineInterface, file: string, real: string, was: string, text: string) {
   const folder = real.slice(0, real.lastIndexOf('/') + 1)
-  const run = (...argv: string[]) => $.process.run(argv, { cwd: folder || '.' }).catch(() => undefined)
+  const run = (...argv: string[]) => $.process.run(argv, { cwd: folder || '.' })
+    .catch((err: unknown) => ({ exitCode: 1, stdout: '', stderr: String((err as Error)?.message ?? err) }))
+  const said = (r: { stderr: string }) => r.stderr.trim().split('\n')[0]
   const moved = async () => ((await $.fs.stat(file, { resolve: true }).catch(() => undefined))?.realPath ?? file) !== real ||
     (await $.fs.read(real)) !== was
   const changed = 'changed during this undo'
   // mktemp makes the name its own, however long the file's is, and never takes a name already there.
   const made = await run('mktemp', `${folder}.agent-undo-${INDEX_TAG}-XXXXXXXX`)
-  if (!made) {
-    if (await moved()) return changed
-    // user file: an undo puts the user's own file back as it was.
-    await $.fs.write(file, text)
-    return undefined
-  }
   const tmp = made.stdout.trim()
-  if (made.exitCode !== 0 || !tmp) return `has no room for a temporary copy beside it (${made.stderr.trim().split('\n')[0]})`
+  if (made.exitCode !== 0 || !tmp) return `could not get a temporary copy beside it (${said(made)})`
   touched(tmp)
   try {
     const copy = await run('cp', '-p', real, tmp)
-    if (copy?.exitCode !== 0) return `could not be copied (${copy?.stderr.trim().split('\n')[0] ?? 'no cp'})`
+    if (copy.exitCode !== 0) return `could not be copied (${said(copy)})`
     await $.fs.write(tmp, text)
     if (await moved()) return changed
     const mv = await run('mv', '-f', tmp, real)
-    if (mv?.exitCode !== 0) throw new Error(mv?.stderr.trim() || 'mv failed')
+    if (mv.exitCode !== 0) throw new Error(mv.stderr.trim() || 'mv failed')
     return undefined
   } finally {
     await run('rm', '-f', tmp)

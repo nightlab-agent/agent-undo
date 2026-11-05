@@ -10,6 +10,7 @@
 // lets the repo top git reports differ from the session root (a symlinked folder).
 import type { TestBody } from 'claude-code/testing'
 import { editResult } from './engine'
+import { tempTool } from './temp-tools'
 
 export type On = Parameters<TestBody>[1]
 export type $T = Parameters<TestBody>[0]
@@ -109,6 +110,8 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
     repo.envs.push({ argv: a, ...(e.init?.env?.GIT_INDEX_FILE ? { index: e.init.env.GIT_INDEX_FILE } : {}) })
     const s = a.join(' ')
     const own = isIdx(e.init?.env?.GIT_INDEX_FILE)
+    const temp = tempTool(repo.files, a)
+    if (temp) return { value: temp as never }
     if (!repo.git) return fail('fatal: not a git repository')
     if (s === 'git rev-parse --show-toplevel --show-prefix') return ok(`${top}\n\n`)
     if (s === 'git rev-parse --path-format=absolute --git-path index --git-path agent-undo.index') return ok(repo.gitPaths ?? `${top}/.git/index\n${BASE}\n`)

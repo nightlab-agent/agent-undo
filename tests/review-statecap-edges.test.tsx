@@ -4,6 +4,7 @@ import type { TestBody } from 'claude-code/testing'
 import type { Change } from '../types'
 import * as common from '../hooks/common'
 import * as shared from '../hooks/shared'
+import { tempTools } from './temp-tools'
 
 type On = Parameters<TestBody>[1]
 type $T = Parameters<TestBody>[0]
@@ -55,6 +56,7 @@ const world = (on: On) => {
   on('fs.exists', (_, e) => ({ value: w.files.has(e.path) }))
   on('fs.read', (_, e) => ({ value: w.files.get(e.path)! }))
   on('fs.write', (_, e) => { w.files.set(e.path, e.text); return { value: undefined } })
+  tempTools(on, w.files)
   on('tool.call', (_, e) => {
     const x = e as unknown as { file_path: string; old_string: string; new_string: string }
     const was = w.files.get(x.file_path)!

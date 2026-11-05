@@ -107,6 +107,9 @@ async function world(t, initial = {}) {
           encoding: 'utf8', timeout: init?.timeoutMs ?? 30000, stdio: ['pipe', 'pipe', 'pipe'],
         }), stderr: '' }
       } catch (e) {
+        // As $.process.run: it rejects when a command cannot start or is still running at the timeout (a spawn error or
+        // ETIMEDOUT here), and a child ended by a signal reads as exit code 1.
+        if (typeof e.code === 'string') throw e
         r = { exitCode: e.status ?? 1, stdout: String(e.stdout ?? ''), stderr: String(e.stderr ?? e.message) }
       }
       if (argv[1] === 'hash-object') await w.afterHash?.()

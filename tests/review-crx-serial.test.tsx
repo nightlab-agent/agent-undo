@@ -1,5 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { TestBody } from 'claude-code/testing'
+import { tempTools } from './temp-tools'
 
 // Code review of 1c08fb2 (0.2.2). The world is review-pr5's (real clock, a store.set that can be held once).
 // S1 (kind 2): run() (the /agent-undo command and the undo tool) runs inside serial(), the queue every Edit
@@ -49,6 +50,7 @@ const world = (on: On, files0: Record<string, string>) => {
   on('fs.exists', (_, e) => ({ value: files.has(e.path) }))
   on('fs.read', (_, e) => { const t = files.get(e.path); if (t === undefined) throw new Error('ENOENT'); return { value: t } })
   on('fs.write', (_, e) => { files.set(e.path, e.text); return { value: undefined } })
+  tempTools(on, files)
   on('tool.call', (_, e) => {
     const x = e as unknown as { file_path: string; old_string: string; new_string: string }
     const was = files.get(x.file_path)!

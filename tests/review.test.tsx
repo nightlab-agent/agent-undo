@@ -2,6 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import { editResult, structuredPatch, writeResult } from './engine'
 import type { TestBody } from 'claude-code/testing'
 import { undoHunk } from '../hooks/register'
+import { tempTools } from './temp-tools'
 
 // Review tests (2026-10-30). Each finding: a FAILING test beside a PASSING
 // comparison case of the nearest normal case. Same harness style as agent-undo.test.tsx.
@@ -36,6 +37,7 @@ const world = (on: On, files0: Record<string, string> = {}, o: Opts = {}) => {
     files.set(e.path, e.text)
     return { value: undefined }
   })
+  tempTools(on, files)
   on('tool.call', (_, e) => {
     const x = e as unknown as { tool: string; file_path: string; old_string?: string; new_string?: string; content?: string }
     if (o.answer) return o.answer(x, files) as never

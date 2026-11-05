@@ -111,6 +111,9 @@ async function world(t, initial = {}, options = {}) {
           encoding: 'utf8', timeout: init?.timeoutMs ?? 30000, stdio: ['pipe', 'pipe', 'pipe'],
         }), stderr: '' }
       } catch (e) {
+        // As $.process.run: it rejects when a command cannot start or is still running at the timeout (a spawn error or
+        // ETIMEDOUT here), and a child ended by a signal reads as exit code 1.
+        if (typeof e.code === 'string') throw e
         r = { exitCode: e.status ?? 1, stdout: String(e.stdout ?? ''), stderr: String(e.stderr ?? e.message) }
       }
       w.results.push({ argv: [...argv], ...r })
@@ -297,7 +300,7 @@ test('putBack: a writable file in a read-only folder is refused: no write that e
   await w.edit('dir/a.txt', 'one', 'ONE')
   await fs.chmod(join(w.root, 'dir'), 0o555)
   try {
-    assert.match(await w.undo('1'), /no room for a temporary copy.*nothing changed/)
+    assert.match(await w.undo('1'), /could not get a temporary copy beside it.*nothing changed/)
     assert.equal(await w.read('dir/a.txt'), 'ONE\n')
   } finally { await fs.chmod(join(w.root, 'dir'), 0o755) }
 })
@@ -697,5 +700,82 @@ for (const way of ['exits non-zero', 'cannot start']) {
     assert.equal(await w.read('secret.env'), 'old\n')
   })
 }
+
+
+// ---- A command that cannot start, at every step: $.process.run rejects, and the outcome line still comes.
+const rejectAt = (w, k, why) => { let n = 0; wrapRun(w, (argv, init, run) => (n++ === k ? Promise.reject(new Error(why)) : run(argv, init))) }
+const steps = async (make, act) => {
+  const w = await make()
+  const from = w.commands.length
+  await act(w)
+  return w.commands.slice(from).map(c => c.argv.slice(0, 2).join(' '))
+}
+const editMade = t => async () => {
+  const w = await world(t, { 'a.txt': 'one\n' })
+  await w.edit('a.txt', 'one', 'ONE')
+  return w
+}
+const shellMade = t => async () => {
+  const w = await world(t, { 'a.txt': 'one\n' })
+  await w.bash("printf 'ONE\\n' > a.txt")
+  return w
+}
+for (const [kind, made, whole] of [['Edit', editMade, ['one\n', 'ONE\n']], ['shell', shellMade, ['one\n', 'ONE\n']]]) {
+  test(`every step of a ${kind} undo that cannot start answers a line and leaves the file whole`, kind === 'Edit' ? { todo: 'a rejected mv, the next commit' } : {}, async t => {
+    const all = await steps(made(t), w => w.undo('1'))
+    assert.ok(all.length >= 3, all.join(', '))
+    const bad = []
+    for (let k = 0; k < all.length; k++) {
+      const w = await made(t)()
+      rejectAt(w, k, `spawn ${all[k]} EAGAIN`)
+      let out
+      try { out = await w.undo('1') } catch (e) { bad.push(`${all[k]}: threw ${e.message}`); continue }
+      if (!/^agent-undo: /.test(out)) bad.push(`${all[k]}: no line: ${out}`)
+      if (!whole.includes(await w.read('a.txt').catch(() => 'missing'))) bad.push(`${all[k]}: the file is not whole: ${out}`)
+      if ((await fs.readdir(w.root)).some(n => n.startsWith('.agent-undo-')) && all[k] !== 'rm -f') bad.push(`${all[k]}: a temporary copy stayed`)
+    }
+    assert.deepEqual(bad, [])
+  })
+}
+
+
+// ---- A rejected mktemp is not a machine with no mktemp: the real $.process.run rejects for both, and neither writes in place.
+const refuseRun = (w, name, why) => wrapRun(w, (argv, init, run) => (argv[0] === name ? Promise.reject(new Error(why)) : run(argv, init)))
+for (const why of ['spawn mktemp EAGAIN', 'spawn mktemp ENOENT', 'mktemp still running at the timeout']) {
+  test(`a rejected mktemp (${why}) writes nothing to the file`, async t => {
+    const w = await world(t, { 'a.txt': 'one\n' })
+    await w.edit('a.txt', 'one', 'ONE')
+    refuseRun(w, 'mktemp', why)
+    const wrote = []
+    w.beforeWrite = p => { wrote.push(p) }
+    assert.match(await w.undo('1'), /a\.txt could not get a temporary copy beside it \(.*mktemp.*\); nothing changed/)
+    assert.deepEqual(wrote, [])
+    assert.equal(await w.read('a.txt'), 'ONE\n')
+  })
+}
+test('killed during a rejected mktemp, the file keeps its text', async t => {
+  const w = await world(t, { 'a.txt': 'one\n' })
+  await w.edit('a.txt', 'one', 'ONE')
+  refuseRun(w, 'mktemp', 'still running at the timeout')
+  w.beforeWrite = path => execFileSync(process.execPath, ['-e',
+    "require('node:fs').openSync(process.argv[1], 'w'); process.kill(process.pid, 'SIGKILL')", path], { stdio: 'ignore' })
+  await w.undo('1').catch(() => {})
+  assert.equal(await w.read('a.txt'), 'ONE\n')
+})
+test('comparison: a mktemp that fails with an exit code refuses and leaves the file', async t => {
+  const w = await world(t, { 'a.txt': 'one\n' })
+  await w.edit('a.txt', 'one', 'ONE')
+  wrapRun(w, (argv, init, run) => (argv[0] === 'mktemp' ? Promise.resolve({ exitCode: 1, stdout: '', stderr: 'mktemp: failed' }) : run(argv, init)))
+  assert.match(await w.undo('1'), /temporary copy.*nothing changed/)
+  assert.equal(await w.read('a.txt'), 'ONE\n')
+})
+test('a machine with no cp refuses, leaving the file and no copy', async t => {
+  const w = await world(t, { 'a.txt': 'one\n' })
+  await w.edit('a.txt', 'one', 'ONE')
+  refuseRun(w, 'cp', 'spawn cp ENOENT')
+  assert.match(await w.undo('1'), /could not be copied \(spawn cp ENOENT\); nothing changed/)
+  assert.equal(await w.read('a.txt'), 'ONE\n')
+  assert.equal((await fs.readdir(w.root)).filter(n => n.startsWith('.agent-undo-')).length, 0)
+})
 
 }

@@ -1,6 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import type { TestBody } from 'claude-code/testing'
 import { bash, repoWorld } from './world'
+import { tempTools } from './temp-tools'
 
 // The list across a new process for the same session (`claude --resume`, as far as a test can
 // tell it): the host's `$.state` is answered here and emptied by `restart`, as a new process
@@ -48,6 +49,7 @@ const world = (on: On, files0: Record<string, string>) => {
     return { value: t }
   })
   on('fs.write', (_, e) => { files.set(e.path, e.text); return { value: undefined } })
+  tempTools(on, files)
   on('tool.call', (_, e) => {
     // A one-line Edit, answered with the engine's result shape (the one changed line as its hunk).
     const x = e as unknown as { file_path: string; old_string: string; new_string: string }

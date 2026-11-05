@@ -2,6 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import { editResult, writeResult } from './engine'
 import type { TestBody } from 'claude-code/testing'
 import { hunksOf, undoHunk } from '../hooks/register'
+import { tempTools } from './temp-tools'
 
 type On = Parameters<TestBody>[1]
 type $T = Parameters<TestBody>[0]
@@ -25,6 +26,7 @@ const world = (on: On, files0: Record<string, string> = {}) => {
     files.set(e.path, e.text)
     return { value: undefined }
   })
+  tempTools(on, files)
   on('tool.call', (_, e) => {
     const x = e as unknown as { tool: string; file_path: string; old_string?: string; new_string?: string; content?: string }
     const was = files.get(x.file_path)

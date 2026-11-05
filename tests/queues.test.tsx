@@ -2,6 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { TestBody } from 'claude-code/testing'
 import { editResult } from './engine'
 import { ROOT, at, start, undo } from './edit-world'
+import { tempTools } from './temp-tools'
 
 type On = Parameters<TestBody>[1]
 type $T = Parameters<TestBody>[0]
@@ -19,6 +20,7 @@ const world = (on: On, files0: Record<string, string>, nest?: (x: Call) => Promi
   on('fs.exists', (_, e) => ({ value: files.has(e.path) }))
   on('fs.read', (_, e) => ({ value: files.get(e.path)! }))
   on('fs.write', (_, e) => { files.set(e.path, e.text); log.push(`wrote ${e.path}`); return { value: undefined } })
+  tempTools(on, files, path => log.push(`wrote ${path}`))
   on('tool.call', async (_, e) => {
     const x = e as unknown as Call
     log.push(`start ${x.file_path}`)

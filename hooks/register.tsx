@@ -224,6 +224,16 @@ const queued = <T,>(e: unknown, f: () => Promise<T>) => {
 }
 
 /** An undo waits for every Edit and Write and holds them all; a listing waits for nothing. */
+// The dialog rejects when dismissed and in a -p run, where no one can answer; free text under Other is not a yes.
+const UNDO_IT = 'Undo it'
+const confirmed = async ($: EngineInterface, ref: string) => {
+  try {
+    return await $.ui.ask(`Let Claude undo ${ref.trim().slice(0, 40)}, putting those lines back?`, { options: [UNDO_IT, 'Keep it'], header: 'agent-undo' }) === UNDO_IT
+  } catch {
+    return false
+  }
+}
+
 const undoing = async ($: EngineInterface, args: string, budgetMs = 10000) => {
   if (['', 'list'].includes(args.trim())) return run($, args)
   // A hook has its budget and then the engine goes on without it: an undo still waiting at the end of it gives up,
@@ -305,14 +315,16 @@ export const register: Register = on => {
 
   on('command.run', { command: 'agent-undo' }, async ($, e, next) => ({ text: await undoing($, e.args, next.budget?.remainingMs) }))
 
-  // A tool served here never reaches the engine's permission step, so that step is asked first. A person's own
-  // /agent-undo needs no such check; Claude's undo goes through only on an allow (a question cannot be put from here).
+  // A tool served here never reaches the engine's permission step, so that step is asked first, and where the engine
+  // would put a question to the person it is put here. A person's own /agent-undo needs no such check.
   on('tool.call', { tool: 'mcp__agent-undo__undo' }, async ($, e, next) => {
     const raw = (e as unknown as { ref?: unknown }).ref
     const ref = typeof raw === 'string' ? raw : ''
     if (!['', 'list'].includes(ref.trim())) {
       const { decision } = await $.tool.check({ tool: e.tool as string, input: { ref } })
-      if (decision !== 'allow') return { result: `agent-undo: Claude Code did not allow this undo; nothing changed. You can type /agent-undo ${ref} yourself.` } as never
+      if (decision !== 'allow' && !(decision === 'ask' && await confirmed($, ref))) {
+        return { result: `agent-undo: Claude Code did not allow this undo; nothing changed. You can type /agent-undo ${ref.trim().slice(0, 40)} yourself.` } as never
+      }
     }
     return { result: await undoing($, ref, next.budget?.remainingMs) } as never
   })

@@ -9,8 +9,9 @@
 - Where git ignores permissions (`core.filemode` false), a shell undo keeps an executable bit you set; `git restore`
   takes it away and said nothing (`tests/release-audit2.test.mjs`).
 - Claude's undo tool now asks Claude Code first. Before, it answered with no permission step, so plan mode and deny
-  rules did not stop it. It goes through only on an allow; otherwise it says so and changes nothing, and `/agent-undo`
-  stays yours (`tests/review-crz.test.tsx`). Listing needs no check.
+  rules did not stop it. An allow goes through; where Claude Code would ask, you get the question; a no, a closed
+  question, a deny or a run with no one to answer changes nothing, and `/agent-undo` stays yours
+  (`tests/review-crz.test.tsx`, `tests/review-ask.test.tsx`). Listing needs no check.
 - An undo killed halfway no longer empties the file: an Edit or Write undo writes a copy beside it and renames
   (`tests/release-audit.test.mjs`, a real killed write).
 - An undo no longer follows a link put at the edited path into another file, or replaces a link or linked folder put

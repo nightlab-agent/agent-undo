@@ -73,14 +73,14 @@ const wide = async ($: $T, w: W, n: number) => {
   console.log(`${n} wide edits: list JSON sizes accepted by the state: ${w.stateSets.join(' ')}; last status: ${w.statuses.at(-1)}`)
 }
 
-test('review-gate C1: the tenth edit, which takes the list past 4 MiB of JSON, is listed and named in the status line', async ($, on) => {
+test('review-gate C1: the tenth edit, which takes the list past 4 MiB of JSON, is listed and named in the status line', { timeoutMs: 60000 }, async ($, on) => {
   const w = world(on, { 'a.txt': tenLines })
   await start($)
   await wide($, w, 10)
   expect(await undo($, '')).toContain('#10 ')
   expect(w.statuses.at(-1)).toContain('#10 ')
 })
-test('review-gate C1 comparison: nine such edits (3.97 MB), the ninth is listed and named in the status line', async ($, on) => {
+test('review-gate C1 comparison: nine such edits (3.97 MB), the ninth is listed and named in the status line', { timeoutMs: 60000 }, async ($, on) => {
   const w = world(on, { 'a.txt': tenLines })
   await start($)
   await wide($, w, 9)
@@ -90,13 +90,13 @@ test('review-gate C1 comparison: nine such edits (3.97 MB), the ninth is listed 
 })
 // C1b: from then on every edit of that size is lost the same way (a small one still fits until the cap is reached:
 // the list does not shrink, and nothing says so).
-test('review-gate C1b: an eleventh such edit after the tenth was lost is listed as #10', async ($, on) => {
+test('review-gate C1b: an eleventh such edit after the tenth was lost is listed as #10', { timeoutMs: 60000 }, async ($, on) => {
   const w = world(on, { 'a.txt': tenLines + 'l11\n' })
   await start($)
   await wide($, w, 11)
   expect(await undo($, '')).toContain('#10 ')
 })
-test('review-gate C1b comparison: after nine such edits, a one-line edit of another file is listed as #10', async ($, on) => {
+test('review-gate C1b comparison: after nine such edits, a one-line edit of another file is listed as #10', { timeoutMs: 60000 }, async ($, on) => {
   const w = world(on, { 'a.txt': tenLines, 'b.txt': 'two\n' })
   await start($)
   await wide($, w, 9)

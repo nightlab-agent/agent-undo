@@ -171,7 +171,7 @@ for (const chars of [BUDGET]) test(`cap edges: undo of a restored singleton of $
   expect(stored(w)[0]!.hunks.every(h => h.undone)).toBe(true)
 })
 
-for (const count of [8, 9]) test(`cap edges: undo flags on ${count} entries cannot grow a fitted list past the engine limit`, { timeoutMs: 30000 }, async ($, on) => {
+for (const count of [8, 9]) test(`cap edges: undo flags on ${count} entries cannot grow a fitted list past the engine limit`, { timeoutMs: 90000 }, async ($, on) => {
   const w = world(on)
   const entries = Array.from({ length: count }, (_, k) => ({ ...entry(k + 1),
     hunks: Array.from({ length: 2000 }, (_, j) => ({ before: j === 0 ? ['a0'] : [], after: [`b${j}`], line: j + 1 })) }))

@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- An Edit or Write waiting on its permission question no longer holds back those of other files, and one made on the
+  way through another Edit of a different file no longer hangs. Before, all of them shared one queue. An undo still
+  waits for every Edit and Write in progress; the list answers at once (`tests/queues.test.tsx`; not seen on a screen).
 - An undo refuses a file holding bytes that are not UTF-8. Before, the undo read the file as text, where each such
   byte shows as U+FFFD, and wrote that text back: the undo said it worked and the bytes were gone. A real U+FFFD
   in good UTF-8 is still fine (`tests/bytes.test.tsx`; not seen on a screen).

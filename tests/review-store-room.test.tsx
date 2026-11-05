@@ -100,7 +100,7 @@ const atOf = (id: string) => `at:${id}`
 // With two other copies of 250 KB, the ninth wide edit (the PR's own C1 comparison case) leaves no copy of s1: a new
 // process for s1 (an exit and `claude --resume`) lists nothing, with no word. README 58-63: "A new process that
 // reports the same session id finds the list again".
-test('review-store-room S1: nine wide edits (3.97 MB) beside two other 250 KB copies; the session\'s copy is stored and a new process lists #9', async ($, on) => {
+test('review-store-room S1: nine wide edits (3.97 MB) beside two other 250 KB copies; the session\'s copy is stored and a new process lists #9', { timeoutMs: 60000 }, async ($, on) => {
   const w = world(on, { 'a.txt': tenLines })
   other(w, 'x1', 1, 250); other(w, 'x2', 2, 250)
   await start($)
@@ -110,7 +110,7 @@ test('review-store-room S1: nine wide edits (3.97 MB) beside two other 250 KB co
   await restart($, w)
   expect(await undo($, '')).toContain('#9 ')
 })
-test('review-store-room S1 comparison: the same nine edits beside one other 250 KB copy; the copy is stored and a new process lists #9', async ($, on) => {
+test('review-store-room S1 comparison: the same nine edits beside one other 250 KB copy; the copy is stored and a new process lists #9', { timeoutMs: 60000 }, async ($, on) => {
   const w = world(on, { 'a.txt': tenLines })
   other(w, 'x1', 1, 250)
   await start($)

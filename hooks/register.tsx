@@ -154,6 +154,16 @@ async function run($: EngineInterface, args: string): Promise<string> {
   return [`agent-undo: ${did}.`, ...notes].join('\n')
 }
 
+/** An Edit or Write with its entry in the list, in its file's queue: an undo behind it finds the entry. */
+const queued = <T,>(e: unknown, f: () => Promise<T>) => {
+  const file = (e as { file_path?: unknown }).file_path
+  return editing(file, () => serial([typeof file === 'string' ? fileKey(file) : ''], f))
+}
+
+/** An undo waits for every Edit and Write and holds them all; a listing waits for nothing. */
+const undoing = ($: EngineInterface, args: string) =>
+  (['', 'list'].includes(args.trim()) ? run($, args) : serial(undefined, () => run($, args)))
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     resetShells()
@@ -178,8 +188,8 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('tool.call', { tool: 'Edit' }, async ($, e, next) => {
-    const done = await editing((e as { file_path?: unknown }).file_path, () => serial(() => next(e)))
+  on('tool.call', { tool: 'Edit' }, ($, e, next) => queued(e, async () => {
+    const done = await next(e)
     try {
       const out = done.deny === undefined && !done.isError ? (done.result as FileOut | undefined) : undefined
       if (!out || out.staged) return done
@@ -194,10 +204,10 @@ export const register: Register = on => {
       // A failure of this mod never changes the edit.
     }
     return done
-  })
+  }))
 
-  on('tool.call', { tool: 'Write' }, async ($, e, next) => {
-    const done = await editing((e as { file_path?: unknown }).file_path, () => serial(() => next(e)))
+  on('tool.call', { tool: 'Write' }, ($, e, next) => queued(e, async () => {
+    const done = await next(e)
     try {
       const out = done.deny === undefined && !done.isError ? (done.result as FileOut | undefined) : undefined
       if (!out || out.staged) return done
@@ -213,14 +223,14 @@ export const register: Register = on => {
       // A failure of this mod never changes the write.
     }
     return done
-  })
+  }))
 
   registerShell(on)
 
-  on('command.run', { command: 'agent-undo' }, async ($, e) => ({ text: await serial(() => run($, e.args)) }))
+  on('command.run', { command: 'agent-undo' }, async ($, e) => ({ text: await undoing($, e.args) }))
 
   on('tool.call', { tool: 'mcp__agent-undo__undo' }, async ($, e) => {
     const ref = (e as unknown as { ref?: unknown }).ref
-    return { result: await serial(() => run($, typeof ref === 'string' ? ref : '')) } as never
+    return { result: await undoing($, typeof ref === 'string' ? ref : '') } as never
   })
 }

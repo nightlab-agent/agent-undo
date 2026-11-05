@@ -1,4 +1,4 @@
-// Small things both hooks share that hold no list: path keys, the clock line, the undo queue, the shell windows.
+// Small things both hooks share that hold no list: path keys, the clock line, the queues, the shell windows.
 
 export const time = (iso: string) => {
   const d = new Date(iso)
@@ -10,12 +10,22 @@ export const slashed = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '')
 /** One file as one key however it is spelled: forward slashes, no doubled or final slash, drive letter upper case. */
 export const fileKey = (p: string) => slashed(p).replace(/\/{2,}/g, '/').replace(/^([a-z]):/, (_, d: string) => `${d.toUpperCase()}:`)
 
-// One undo at a time, and no Edit or Write runs while one does: an undo reads a file and writes
-// it back, and an edit landing in between would be lost.
-let queue: Promise<unknown> = Promise.resolve()
-export const serial = <T,>(f: () => Promise<T>): Promise<T> => {
-  const p = queue.then(f, f)
-  queue = p.catch(() => undefined)
+// No Edit, Write or undo of a file runs beside another of the same file: an undo reads a file and writes it back, and
+// an edit landing in between would be lost. Each file has its own queue, so an Edit waiting on its question holds
+// back no other file's. `keys` undefined waits for every queue and holds them all: an undo.
+const tails = new Map<string, Promise<unknown>>()
+let whole: Promise<unknown> = Promise.resolve()
+export const serial = <T,>(keys: readonly string[] | undefined, f: () => Promise<T>): Promise<T> => {
+  const p = Promise.allSettled(keys ? [whole, ...keys.map(k => tails.get(k))] : [whole, ...tails.values()]).then(f)
+  const done = p.catch(() => undefined)
+  if (!keys) {
+    whole = done
+    tails.clear()
+  }
+  for (const k of keys ?? []) {
+    tails.set(k, done)
+    void done.then(() => { if (tails.get(k) === done) tails.delete(k) })
+  }
   return p
 }
 

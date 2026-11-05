@@ -1,4 +1,4 @@
-import type { EngineInterface } from 'claude-code'
+type Sleep = (ms: number, options: { signal: AbortSignal }) => Promise<unknown>
 
 // Small things both hooks share that hold no list: path keys, the clock line, the queues, the shell windows.
 
@@ -101,10 +101,10 @@ export const editing = async <T,>(file: unknown, f: () => Promise<T>): Promise<T
  * margin from spinning the clock, and applies only once a look found it had not moved, so a running budget is met on
  * time; the ceiling keeps an unmetered Infinity out of a sleep the engine refuses.
  */
-export const budgetEnds = async ($: EngineInterface, left: () => number | undefined, turn: Turn, signal: AbortSignal) => {
+export const budgetEnds = async (sleep: Sleep, left: () => number | undefined, turn: Turn, signal: AbortSignal) => {
   let ms = (left() ?? 10000) - 1500, floor = 0
   while (ms > 0) {
-    await $.clock.sleep(Math.min(Math.max(ms, floor), 60000), { signal })
+    await sleep(Math.min(Math.max(ms, floor), 60000), { signal })
     const next = (left() ?? 0) - 1500
     floor = next < ms ? 0 : 250
     ms = next
@@ -117,10 +117,10 @@ export const budgetEnds = async ($: EngineInterface, left: () => number | undefi
  * way, would land over it. So it stops first and says so: the agent can try again, and nothing is lost. A wait that was
  * refused has not waited, so it stops then too.
  */
-export const heldByUndo = async <T,>($: EngineInterface, key: string[], budget: { remainingMs?: number } | undefined, f: () => Promise<T>) => {
+export const heldByUndo = async <T,>(sleep: Sleep, key: string[], budget: { remainingMs?: number } | undefined, f: () => Promise<T>) => {
   const turn = newTurn()
   const stop = new AbortController()
-  void budgetEnds($, () => budget?.remainingMs, turn, stop.signal).catch(() => { if (!stop.signal.aborted) turn.say('budget') })
+  void budgetEnds(sleep, () => budget?.remainingMs, turn, stop.signal).catch(() => { if (!stop.signal.aborted) turn.say('budget') })
   try {
     return await inTurn<T>(turn, (job, left) => serial(key, job, left), f, () => ({ deny: EDIT_WAITED }) as T)
   } finally {

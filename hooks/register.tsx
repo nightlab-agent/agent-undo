@@ -236,7 +236,7 @@ const outcome = ($: EngineInterface, args: string, turn: Turn) => run($, args, t
 const queued = <T,>($: EngineInterface, e: unknown, next: { budget?: { remainingMs?: number } }, f: () => Promise<T>) => {
   const file = (e as { file_path?: unknown }).file_path
   const key = [typeof file === 'string' ? fileKey(file) : '']
-  return editing(file, () => undoAhead() ? heldByUndo($, key, next.budget, f) : serial(key, f))
+  return editing(file, () => undoAhead() ? heldByUndo((ms, o) => $.clock.sleep(ms, o), key, next.budget, f) : serial(key, f))
 }
 
 
@@ -276,7 +276,7 @@ const undoing = async ($: EngineInterface, args: string, left: () => number | un
   if (signal?.aborted) interrupted()
   signal?.addEventListener('abort', interrupted, { once: true })
   ended.add(conversationEnded)
-  void budgetEnds($, left, turn, stop.signal).catch(() => {})
+  void budgetEnds((ms, o) => $.clock.sleep(ms, o), left, turn, stop.signal).catch(() => {})
   const id = sessionId($)
   try {
     return await inTurn(turn, (job, left) => serial(undefined, job, left), async () => (await id === await sessionId($) ? outcome($, args, turn) : notUndone.ended), why => notUndone[why])

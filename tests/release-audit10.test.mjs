@@ -181,7 +181,8 @@ for (const callMs of [780, 0]) {
   })
 }
 
-// ---- R2: a `next` without a budget (the fallback 10000). Before, the fallback fired the undo's own bound at 8.5 s; now a constant
+// ---- R2: a `next` without a budget (the fallback 10000). The engine always gives one (NextBudget, Infinity where nothing
+// meters), so this is a guard, and R2b below is the engine's shape. Before, the fallback fired the undo's own bound at 8.5 s; now a constant
 // never counts down, and an undo queued behind an Edit at a question is never answered "still waiting".
 for (const metered of [false, true]) {
   test(`R2${metered ? ' comparison' : ''}: an undo queued behind an Edit at its question, \`next.budget\` ${metered ? 'counting' : 'absent'}, is answered within 10 s`, { timeout: 30000 }, async t => {
@@ -202,6 +203,23 @@ for (const metered of [false, true]) {
     assert.match(out, /still waiting/)
   })
 }
+
+// ---- R2b: the engine's unmetered shape. Nothing will run the Edit beside the undo, so the undo waits its turn and goes.
+test('R2b: an undo queued behind an Edit at its question, `next.budget` Infinity, waits with no refusal and goes when the Edit ends', { timeout: 30000 }, async t => {
+  const w = await world(t, { 'a.txt': 'one\n' })
+  await w.edit('a.txt', 'one', 'ONE')
+  const held = gate()
+  w.holdLeaf = held.p
+  const edit = w.edit('a.txt', 'ONE', 'TWO')
+  await sleep(50)
+  const undo = w.undo('1', () => ({ remainingMs: Infinity }))
+  const early = await Promise.race([undo, sleep(2000).then(() => 'still pending')])
+  assert.equal(early, 'still pending')
+  held.open(); w.holdLeaf = undefined; await edit
+  const out = await Promise.race([undo, sleep(5000).then(() => 'no answer in 5 s')])
+  t.diagnostic(`${out}; sleeps asked: ${w.sleeps.join(',')}`)
+  assert.doesNotMatch(out, /still waiting|no answer/)
+})
 
 // ---- R3: the bound's loop while a `$` call is in flight with little own time left: one sleep per remaining ms.
 test('R3: the budget loop during one 3 s `$` call with 1510 ms of own time left asks few sleeps', { timeout: 30000 }, async t => {

@@ -15,7 +15,7 @@ after(() => fs.rm(scratch, { recursive: true, force: true }))
 execFileSync(process.env.TSC ?? 'tsc', [
   '--target', 'es2023', '--module', 'node16', '--moduleResolution', 'node16',
   '--jsx', 'react', '--jsxFactory', 'h', '--skipLibCheck', '--strict',
-  '--rootDir', source, '--outDir', scratch, process.env.CC_TYPES,
+  '--rootDir', source, '--outDir', scratch, process.env.CC_TYPES ?? join(source, '.claude-plugin/types/claude-code/index.d.ts'),
   ...['register', 'common', 'shared', 'hunks', 'shell', 'shell-undo'].map(n => join(source, `hooks/${n}.tsx`)),
   join(source, 'types/index.d.ts'),
 ], { cwd: scratch, stdio: 'pipe' })

@@ -115,7 +115,7 @@ async function world(t, initial = {}, options = {}) {
     const run = i => {
       if (i === matches.length) return leaf(e)
       // As the engine has it: each read of `next.budget` is a new frozen snapshot.
-      const next = Object.defineProperty(Object.assign(input => run(i + 1), { signal: new AbortController().signal }), 'budget', { get: () => Object.freeze({ remainingMs: budgetOf().remainingMs }) })
+      const next = Object.defineProperty(Object.assign(input => run(i + 1), { signal: new AbortController().signal }), 'budget', { get: () => { const b = budgetOf(); return b && Object.freeze({ remainingMs: b.remainingMs }) } })
       return matches[i].handler($, e, next)
     }
     return run(0)

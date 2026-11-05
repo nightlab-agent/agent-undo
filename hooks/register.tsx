@@ -5,7 +5,7 @@ import type { Change, Hunk } from '../types'
 import { acrossUndo, followed, hunksFrom, onceIn, undoAt } from './hunks'
 import type { Move, Patch } from './hunks'
 import { editing, fileKey, forgetRestore, record, restoreList, serial, showNewest, slashed, snapped, time, updateList } from './common'
-import { ownTool, registerShell, resetShells, shellStopped, spelled, undoShell } from './shell'
+import { ownTool, registerShell, shellStopped, spelled, undoShell } from './shell'
 
 // The session's list (the same plugin, key and shape in each file that reads or writes it: the
 // engine's scan lists a module's state per file). Change the tag in both (and SHAPE in common.tsx) when a Change's
@@ -168,7 +168,8 @@ const undoing = ($: EngineInterface, args: string) =>
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    resetShells()
+    // No shell reset: this fires again in a running process (a reload), where a command may still be in the
+    // background. A new conversation goes through session.end (hooks/shell.tsx), which does reset.
     forgetRestore()
     await $.command.register({
       name: 'agent-undo',

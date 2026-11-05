@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- Recording stays off after a background command when the engine fires its start hook again in a running process.
+  Before, that second start turned recording back on, and the command's later writes landed in the next record; a
+  command running at that moment also lost its own record. A /clear or a resume still starts fresh
+  (`tests/background.test.tsx`; the second start is raised by the test, not seen in a real reload).
 - An Edit or Write waiting on its permission question no longer holds back those of other files, and one made on the
   way through another Edit of a different file no longer hangs. Before, all of them shared one queue. An undo still
   waits for every Edit and Write in progress; the list answers at once (`tests/queues.test.tsx`; not seen on a screen).

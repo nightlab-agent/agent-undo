@@ -337,8 +337,8 @@ async function around<D extends Done>($: EngineInterface, rawId: unknown, agent:
   return done
 }
 
-/** A new conversation (a start, or the process going on after /clear) starts with no shell state. */
-export const resetShells = () => {
+/** A new conversation (the process going on after /clear or a resume) starts with no shell state. */
+const resetShells = () => {
   stopped = undefined
   for (const sh of shells) end(sh)
   pending.clear()

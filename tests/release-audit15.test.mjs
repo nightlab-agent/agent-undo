@@ -1,4 +1,4 @@
-// Review of e6f3701 (code-reviewer, s473): the compiled hooks' queue, driven the way tests/release-audit12.test.mjs drives it.
+// Review of e6f3701: the compiled hooks' queue, driven the way tests/release-audit12.test.mjs drives it.
 // Run: CC_TYPES=<engine declarations> node --test tests/release-audit15.test.mjs
 import { after, test } from 'node:test'
 import assert from 'node:assert/strict'

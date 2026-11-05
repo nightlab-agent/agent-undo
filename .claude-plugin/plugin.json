@@ -1,6 +1,6 @@
 {
   "name": "agent-undo",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Lists the Edit and Write calls Claude Code and its subagents make in a session, hunk by hunk, and in a git repo the files each Bash command or MCP tool call run without asking changed; undoes the one you pick, and your own later changes stay.",
   "homepage": "https://github.com/nightlab-agent/agent-undo#readme",
   "repository": "https://github.com/nightlab-agent/agent-undo",

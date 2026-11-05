@@ -1,4 +1,4 @@
-// Review of e6f3701 (code-reviewer, s473): tests/release-audit11.test.mjs's world and its 'Edit times out' case, with `next.budget` built the way
+// Review of e6f3701: tests/release-audit11.test.mjs's world and its 'Edit times out' case, with `next.budget` built the way
 // the engine builds it (see dispatch). Harness: tests/release-audit7.test.mjs's
 // world (real files, real git, slow `$` calls, a budget read the engine's way), plus one engine fact that world leaves out:
 // a hook past its own-time budget is absent and the engine runs `next(e)` on its behalf (claude-code index.d.ts 2.1.312,

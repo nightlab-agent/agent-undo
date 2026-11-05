@@ -23,6 +23,10 @@ without running a session. A later engine may differ; the audit that led to this
   4 MiB rejects. `$.fs.write` is `writeFile`: it follows a link, makes parent folders, is not atomic.
 - `$.fs.exists` is `stat`: false under a file, false for a link that leads nowhere. `$.fs.stat` is
   `lstat` first: a missing path rejects with text ending in the errno (`ENOENT`, `ENOTDIR`).
+- A tool's absolute `file_path` goes through `path.normalize`: `..` is folded as text, so `link/../c.txt` is the link's
+  parent's `c.txt`, not its target's parent's. `$.fs.stat` under the kit folds the same way before a hook sees the path
+  (seen in a test); `{ resolve: true }` is declared to follow every link and fold `..`. Hooks import nothing but
+  `claude-code`, so `fs.realpathSync` is not to hand. Real `$.fs.stat` on such a path was not run.
 - An Edit or Write with `_host` naming a machine runs on that machine. A trimmed empty name, `container`
   and `this-machine` mean here. Declarations do not list `_host`; the field was read from the binary.
 

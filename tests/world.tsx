@@ -47,6 +47,8 @@ export type Repo = {
   pruned: boolean
   /** Paths that are symbolic links; a link that leads nowhere is `other` to the engine's stat, as a real one is. */
   links: Set<string>
+  /** Symbolic links to folders, link to target. */
+  folderLinks: Record<string, string>
   /** `.gitattributes` as git reads it: the filter set on a path. */
   filters: Record<string, string>
   /** Any other tool (an MCP tool, or an unknown one), by name: what it does to the files; 'error' answers an
@@ -60,13 +62,23 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
   const IDX = `${top}/.git/agent-undo.index`
   const repo: Repo = {
     files: new Map(Object.entries(files0).map(([k, v]) => [`${ROOT}/${k}`, v])),
-    runs: [], envs: [], status: [], git: opts.git ?? true, scripts: {}, adds: 0, verdict: 'allow', locked: false, pruned: false, links: new Set(), filters: {}, tools: {},
+    runs: [], envs: [], status: [], git: opts.git ?? true, scripts: {}, adds: 0, verdict: 'allow', locked: false, pruned: false, links: new Set(), folderLinks: {}, filters: {}, tools: {},
   }
   const trees = new Map<string, Map<string, string>>()
   const rel = (p: string) => p.slice(ROOT.length + 1)
   const real = (p: string) => (p.startsWith(`${top}/`) ? `${ROOT}/${p.slice(top.length + 1)}` : p)
   const ok = (stdout = '') => ({ value: { exitCode: 0, stdout, stderr: '' } as never })
   const fail = (stderr: string) => ({ value: { exitCode: 128, stdout: '', stderr } as never })
+  /** Where a path lands. As the engine does for a tool's path and the kit for `$.fs.stat`, `..` is folded as text first,
+   * so a `..` after a link is the link's parent (tests/ENGINE-NOTES.md); then each folder link is followed. */
+  const land = (p: string) => {
+    const parts: string[] = []
+    for (const part of p.split('/').slice(1)) {
+      if (part === '..') parts.pop()
+      else if (part !== '.') parts.push(part)
+    }
+    return parts.reduce((at, part) => repo.folderLinks[`${at}/${part}`] ?? `${at}/${part}`, '')
+  }
   on('session.root', () => ({ value: ROOT }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('command.register', () => ({ value: { command: 'agent-undo' } }))
@@ -76,11 +88,12 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
   on('fs.exists', (_, e) => ({ value: repo.files.has(real(e.path)) }))
   // As the engine's stat: rejects for a missing path, so also below a file; a folder is any path with files under it.
   on('fs.stat', (_, e) => {
-    const p = real(e.path)
+    const p = land(real(e.path))
     const isLink = repo.links.has(p)
     const dir = [...repo.files.keys()].some(k => k.startsWith(`${p}/`))
     if (!isLink && !dir && !repo.files.has(p)) throw new Error('ENOENT')
-    return { value: { kind: isLink && !repo.files.has(p) && !dir ? 'other' : dir ? 'dir' : 'file', size: 0, mtimeMs: 0, isLink } as never }
+    const leads = !isLink || repo.files.has(p) || dir
+    return { value: { kind: leads ? (dir ? 'dir' : 'file') : 'other', size: 0, mtimeMs: 0, isLink, ...(e.resolve && leads ? { realPath: p } : {}) } as never }
   })
   on('fs.read', (_, e) => {
     const t = repo.files.get(real(e.path))
@@ -155,8 +168,9 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
       return { result: { stdout: '', stderr: '', interrupted: false } } as never
     }
     if (x.tool === 'Edit') {
-      const { disk, result } = editResult(repo.files.get(x.file_path!)!, x as Parameters<typeof editResult>[1])
-      repo.files.set(x.file_path!, disk)
+      const path = land(x.file_path!)
+      const { disk, result } = editResult(repo.files.get(path)!, x as Parameters<typeof editResult>[1])
+      repo.files.set(path, disk)
       return { result } as never
     }
     const tool = repo.tools[x.tool]

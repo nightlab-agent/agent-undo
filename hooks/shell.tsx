@@ -186,6 +186,25 @@ const end = (sh: Shell) => {
   shells.delete(sh)
   windows.delete(sh.mine)
 }
+/** Where a path lands by the system's own walk (a link's `..` is its target's parent, so no string can say). A file that
+ * is gone lands through its folder; a path that leads nowhere stays as spelled. */
+const landed = async ($: EngineInterface, path: string) => {
+  const real = async (p: string) => (await $.fs.stat(p, { resolve: true }).catch(() => undefined))?.realPath
+  const cut = path.lastIndexOf('/')
+  const own = await real(path)
+  if (own !== undefined) return fileKey(own)
+  const folder = await real(path.slice(0, cut + 1))
+  return fileKey(folder === undefined ? path : `${folder}/${path.slice(cut + 1)}`)
+}
+/** The files an Edit, Write or undo did not take: `mine` holds each by the path it was given, a link's perhaps, and git
+ * names each by its real path under its top. */
+const commandsOwn = async ($: EngineInterface, sh: Shell, all: ShellFile[]) => {
+  const files = all.filter(f => !sh.mine.has(fileKey(spelled(sh.repo, f.path))))
+  if (files.length === 0 || sh.mine.size === 0) return files
+  const theirs = new Set(await Promise.all([...sh.mine].map(k => landed($, k))))
+  const top = await landed($, sh.repo.top)
+  return files.filter(f => !theirs.has(fileKey(`${top}/${f.path}`)))
+}
 const take = (id: unknown) => {
   const sh = typeof id === 'string' ? pending.get(id) : undefined
   if (typeof id === 'string') { pending.delete(id); asked.delete(id) }
@@ -343,7 +362,7 @@ async function around<D extends Done>($: EngineInterface, rawId: unknown, agent:
     }
     if (after === sh.before) return done
     const all = filesOf(await git($, ['diff-tree', '-r', '-z', '--no-renames', sh.before, after], sh.repo.top))
-    const files = all.filter(f => !sh.mine.has(fileKey(spelled(sh.repo, f.path))))
+    const files = await commandsOwn($, sh, all)
     if (files.length === 0) return done
     await record($, {
       at: new Date().toISOString(), tool, file: label,

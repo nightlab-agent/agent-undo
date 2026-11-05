@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- An Edit through a linked folder during a command stays with the Edit. Before, git's real path and the Edit's path
+  did not match, so the file was listed under the command too. Paths are now compared by where they land
+  (`tests/symlink-edit.test.tsx`; the test world walks links as the declarations say, no real link was followed).
 - When git cannot take a snapshot, the status line and the list give git's first error line. Before, a failed
   `git add -A` (a nested repo with no commit, `core.safecrlf` refusing a file) turned off the Bash and MCP record with
   no word. Each command still tries again, and the line goes once one works (`tests/git-fails.test.tsx`, git's words

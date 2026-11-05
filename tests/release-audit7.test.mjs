@@ -110,10 +110,8 @@ async function world(t, initial = {}, options = {}) {
     const matches = handlers.filter(h => h.event === event && (!h.filter || Object.entries(h.filter).every(([k, v]) => e[k] === v)))
     const run = i => {
       if (i === matches.length) return leaf(e)
-      const next = Object.assign(input => run(i + 1), {
-        // As the engine reads it: the hook's own time only, never a `$` call's.
-        budget: { get remainingMs() { return Math.max(0, HOOK_MS - ownElapsed()) } }, signal: new AbortController().signal,
-      })
+      // As the engine has it: each read of `next.budget` is a new frozen snapshot.
+      const next = Object.defineProperty(Object.assign(input => run(i + 1), { signal: new AbortController().signal }), 'budget', { get: () => Object.freeze({ remainingMs: Math.max(0, HOOK_MS - ownElapsed()) }) })
       return matches[i].handler($, e, next)
     }
     return run(0)

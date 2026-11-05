@@ -24,10 +24,12 @@ let undos = 0
 export const undoAhead = () => undos > 0
 let whole: Promise<unknown> = Promise.resolve()
 export const serial = <T,>(keys: readonly string[] | undefined, f: () => Promise<T>, left?: Promise<void>): Promise<T> => {
-  const p = Promise.allSettled(keys ? [whole, ...keys.map(k => tails.get(k))] : [whole, ...tails.values()]).then(() => f())
+  const own = [whole, ...(keys ?? []).map(k => tails.get(k))]
+  const p = Promise.allSettled(keys ? own : [whole, ...tails.values()]).then(() => f())
   const settled = p.catch(() => undefined)
-  // Leaving hands the queue to what stood ahead: a running undo is held only by this link.
-  const ahead = whole
+  // Leaving hands the queue to what stood ahead in it: a running undo, and an Edit of the same file at its question. An
+  // undo left waiting on every file's queue holds only by `whole`, so a job behind it waits for no other file's Edit.
+  const ahead = Promise.allSettled(own)
   const done = left ? Promise.race([settled, left.then(() => ahead)]) : settled
   if (!keys) {
     whole = done
@@ -117,10 +119,10 @@ export const budgetEnds = async (sleep: Sleep, left: () => number | undefined, t
  * way, would land over it. So it stops first and says so: the agent can try again, and nothing is lost. A wait that was
  * refused has not waited, so it stops then too.
  */
-export const heldByUndo = async <T,>(sleep: Sleep, key: string[], budget: { remainingMs?: number } | undefined, f: () => Promise<T>) => {
+export const heldByUndo = async <T,>(sleep: Sleep, key: string[], budget: () => number | undefined, f: () => Promise<T>) => {
   const turn = newTurn()
   const stop = new AbortController()
-  void budgetEnds(sleep, () => budget?.remainingMs, turn, stop.signal).catch(() => { if (!stop.signal.aborted) turn.say('budget') })
+  void budgetEnds(sleep, budget, turn, stop.signal).catch(() => { if (!stop.signal.aborted) turn.say('budget') })
   try {
     return await inTurn<T>(turn, (job, left) => serial(key, job, left), f, () => ({ deny: EDIT_WAITED }) as T)
   } finally {

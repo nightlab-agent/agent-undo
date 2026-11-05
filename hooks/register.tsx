@@ -236,7 +236,7 @@ const outcome = ($: EngineInterface, args: string, turn: Turn) => run($, args, t
 const queued = <T,>($: EngineInterface, e: unknown, next: { budget?: { remainingMs?: number } }, f: () => Promise<T>) => {
   const file = (e as { file_path?: unknown }).file_path
   const key = [typeof file === 'string' ? fileKey(file) : '']
-  return editing(file, () => undoAhead() ? heldByUndo((ms, o) => $.clock.sleep(ms, o), key, next.budget, f) : serial(key, f))
+  return editing(file, () => undoAhead() ? heldByUndo((ms, o) => $.clock.sleep(ms, o), key, () => next.budget?.remainingMs, f) : serial(key, f))
 }
 
 

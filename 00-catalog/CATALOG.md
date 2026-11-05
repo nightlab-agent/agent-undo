@@ -47,6 +47,10 @@
 | `tests/release-audit10.test.mjs` | An Edit queued behind a slow undo: the undo stops before it writes. |
 | `tests/release-audit11.test.mjs` | A write in flight when the Edit behind it runs out of time; a clock correction during an undo. |
 | `tests/release-audit12.test.mjs` | A budget that moves, stands still and jumps. |
+| `tests/release-audit13.test.mjs` | An Edit or Write stops itself at the margin of a budget read as the engine gives it. |
+| `tests/release-audit14.test.mjs` | An Edit that leaves its queue keeps the same-file Edit ahead of it held. |
+| `tests/release-audit15.test.mjs` | A later undo waits for an Edit whose neighbour left the queue. |
+| `tests/release-audit16.test.mjs` | A slow undo, with the budget in the engine's shape, leaves the Edit stopped and the file whole. |
 | `tests/review-tsr-after-turn.test.tsx` | A shell undo past its time spends no git call per file. |
 | `tests/native-ask.sh` | The real engine's words on an ask, which hooks/register.tsx reads. |
 | `tests/temp-tools.tsx` | Fake `mktemp`, `cp`, `mv` and `rm` for the plugin test worlds. |

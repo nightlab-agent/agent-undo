@@ -126,9 +126,9 @@ async function world(t, initial = {}, options = {}) {
     const matches = handlers.filter(h => h.event === event && (!h.filter || Object.entries(h.filter).every(([k, v]) => e[k] === v)))
     const run = i => {
       if (i === matches.length) return leaf(e)
-      const next = Object.assign(input => dispatchFrom(i + 1, input), {
-        budget: { started: Date.now(), get remainingMs() { return (w.budgetMs ?? 10000) - (Date.now() - this.started) } }, signal: w.signal ?? new AbortController().signal,
-      })
+      const started = Date.now()
+      // As the engine has it: each read of `next.budget` is a new frozen snapshot.
+      const next = Object.defineProperty(Object.assign(input => dispatchFrom(i + 1, input), { signal: w.signal ?? new AbortController().signal }), 'budget', { get: () => Object.freeze({ remainingMs: (w.budgetMs ?? 10000) - (Date.now() - started) }) })
       return matches[i].handler($, e, next)
     }
     const dispatchFrom = (i, input) => {

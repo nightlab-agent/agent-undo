@@ -75,6 +75,7 @@ async function putBack($: EngineInterface, file: string, real: string, was: stri
   const made = await run('mktemp', `${folder}.agent-undo-${INDEX_TAG}-XXXXXXXX`)
   if (!made) {
     if (await moved()) return changed
+    // user file: an undo puts the user's own file back as it was.
     await $.fs.write(real, text)
     return undefined
   }

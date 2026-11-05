@@ -36,7 +36,10 @@
 | `tests/git-snapshot.sh` | The Bash record's git commands on a real scratch repo. |
 | `tests/git-wipe.sh` | Real git commands that throw away uncommitted work, then undone. |
 | `tests/release-audit.test.mjs` | The compiled hooks on real files, links, modes and git: kills, links, private files. |
-| `tests/release-audit2.test.mjs` | The same on real files: permissions, temporary copies, an undo waiting its turn. |
+| `tests/audit-harness.mjs` | The hooks compiled on real files, shared by the next three. |
+| `tests/release-audit2.test.mjs` | The same on real files: renames, links, temporary copies. |
+| `tests/release-audit17.test.mjs` | Real files: permissions, a copy that cannot be made. |
+| `tests/release-audit18.test.mjs` | Real files: an undo waiting its turn. |
 | `tests/release-audit3.test.mjs` | The same: a conversation or interrupt during an undo, the queue after one gives up. |
 | `tests/release-audit4.test.mjs` | The same: the turn and the queue under a passed bound, a restore cut short. |
 | `tests/release-audit5.test.mjs` | The same: one undo giving up behind another, the last read, a list changing hands. |

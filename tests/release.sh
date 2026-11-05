@@ -14,6 +14,8 @@ node --test tests/mcp-writer.test.mjs
 # Real files, links, permissions and git, where tests/world.tsx has only maps (tests/ENGINE-NOTES.md).
 node --test tests/release-audit.test.mjs
 node --test tests/release-audit2.test.mjs
+node --test tests/release-audit17.test.mjs
+node --test tests/release-audit18.test.mjs
 node --test tests/release-audit3.test.mjs
 node --test tests/release-audit4.test.mjs
 node --test tests/release-audit5.test.mjs

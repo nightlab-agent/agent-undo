@@ -8,7 +8,7 @@
   `/resume`. An undo that gives up leaves the queue at once, so Edits of other files go on. One that has begun looks
   at its turn again before its write, and a conversation that ends during it leaves the next conversation's list
   alone, read inside the list's own update. A conversation that ends during the permission check spends the allow too, and a snapshot's git call that
-  never comes back no longer holds the queue for good (`tests/release-audit2.test.mjs`,
+  never comes back no longer holds the queue for good (`tests/release-audit18.test.mjs`,
   `tests/release-audit3.test.mjs`, real files and real git).
 - An undo on a slow drive is no longer refused as out of time: its limit now counts the hook's own time, as Claude Code's
   does, not the time its tools take (`tests/release-audit7.test.mjs`). While that time stands still it looks again at most four times a second, and with no time to read it waits once (`tests/release-audit8.test.mjs`, `tests/release-audit9.test.mjs`). A slow undo stops before its write once an Edit behind it nears that Edit's own 10 s, so it cannot land over an Edit Claude Code ran on without it (`tests/release-audit10.test.mjs`).
@@ -22,11 +22,11 @@
 - A deleted file whose restore was cut short now reads "failed part way" with the command that brings it back. Before,
   it said "nothing changed" with part of the file on disk (`tests/release-audit4.test.mjs`).
 - If no copy can be made for an undo (a folder you cannot write in, `mktemp`, `cp` or `mv` that cannot run), the undo
-  says so and changes nothing (`tests/release-audit2.test.mjs`, real files).
+  says so and changes nothing (`tests/release-audit2.test.mjs`, `tests/release-audit17.test.mjs`, real files).
 - An undo no longer lands on another file if a link replaces the file while the undo reads it
   (`tests/release-audit2.test.mjs`).
 - Where git ignores permissions (`core.filemode` false), a shell undo keeps an executable bit you set; `git restore`
-  takes it away and said nothing (`tests/release-audit2.test.mjs`).
+  takes it away and said nothing (`tests/release-audit17.test.mjs`).
 - Claude's undo tool now checks Claude Code's permission rules and mode first (not settings hooks or the auto-mode classifier; a plugin's own check hook is asked).
   Before, it answered with no permission step, so plan mode and deny rules did not stop it. An allow goes through;
   where the rules ask, you get the question; a no, a closed question, a deny, an ask of a kind it does not know or a

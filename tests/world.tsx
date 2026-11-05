@@ -185,7 +185,8 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
     }
     throw new Error(`unexpected tool ${x.tool}`)
   })
-  on('tool.check', () => ({ decision: repo.verdict }) as never)
+  // The reason an ask really carries, read from Claude Code 2.1.312 in tests/native-ask.sh.
+  on('tool.check', () => ({ decision: repo.verdict, ...(repo.verdict === 'ask' ? { reason: "Claude requested permissions to use this tool, but you haven't granted it yet." } : {}) }) as never)
   // The question: the host raises it inside $.tool.call when the verdict is "ask". The person
   // acts while it waits (repo.person), then says yes.
   on('classic.PermissionRequest' as never, (async () => {

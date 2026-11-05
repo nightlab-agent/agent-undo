@@ -336,9 +336,14 @@ const resetShells = () => {
 export const shellNote = () => (stopped ? `Shell commands are no longer recorded in this session: ${stopped}.`
   : failed !== undefined ? `The last command was not recorded: git said ${failed}.` : undefined)
 
+let ends = 0
+/** How many conversations have ended in this process: an open question compares it across its wait. */
+export const sessionEnds = () => ends
+
 /** The Bash hooks: the first snapshot at the engine's decision, the second after the command. */
 export const registerShell = (on: Parameters<Register>[0]) => {
   on('session.end', async ($, e, next) => {
+    ends += 1
     resetShells()
     // A /clear or /resume swaps the conversation in this process with no session.start: the next one's
     // list (an id seen before, too) is read from the store again, never taken for already loaded.

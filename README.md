@@ -42,9 +42,10 @@ own diff of that edit, and numbers each hunk:
   tells you what the tool reported. Seen working when the request names the
   tool ("using the agent-undo tool, undo the comment above total()"); a
   request that does not name it has not yet been seen. Where Claude Code would
-  ask before a tool runs, Claude's undo asks you first; a no, a closed question
-  or a run with no one to answer changes nothing, and `/agent-undo` is yours to
-  type.
+  ask before a tool runs, Claude's undo asks you first; a no, a closed question,
+  a conversation that ended meanwhile or a run with no one to answer changes
+  nothing, and `/agent-undo` is yours to type. In plan mode it does not ask: it
+  refuses.
 - The list shows the newest 20 edits and keeps the newest 300, fewer when they
   are big: the oldest go first so the list stays under the 4 MiB Claude Code
   keeps for it. An edit of more than 4000 lines, or one that alone would fill

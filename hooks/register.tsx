@@ -5,7 +5,7 @@ import type { Change, Hunk } from '../types'
 import { acrossUndo, followed, hunksFrom, onceIn, undoAt } from './hunks'
 import type { Move, Patch } from './hunks'
 import { editing, fileKey, forgetRestore, record, restoreList, serial, showNewest, slashed, snapped, time, touched, updateList } from './common'
-import { INDEX_TAG, ownTool, registerShell, shellNote, spelled } from './shell'
+import { INDEX_TAG, ownTool, registerShell, sessionEnds, shellNote, spelled } from './shell'
 import { undoShell } from './shell-undo'
 
 // The session's list (the same plugin, key and shape in each file that reads or writes it: the
@@ -234,6 +234,14 @@ const confirmed = async ($: EngineInterface, ref: string) => {
   }
 }
 
+// The engine's ask carries no field for why. Its reason is the only mark: plan mode asks with its own words, and a yes
+// must not override that. An unknown reason is treated as a no; tests/native-ask.sh checks both wordings at each release.
+const askable = (verdict: { reason?: string; plugin?: string }) =>
+  !/plan mode/i.test(verdict.reason ?? '') && (verdict.plugin !== undefined || /requested permissions/i.test(verdict.reason ?? ''))
+
+// A conversation ended under an open question: its "1" is not the "1" of what came after, so the yes is spent.
+const sessionId = ($: EngineInterface) => $.session.id().catch(() => undefined)
+
 const undoing = async ($: EngineInterface, args: string, budgetMs = 10000) => {
   if (['', 'list'].includes(args.trim())) return run($, args)
   // A hook has its budget and then the engine goes on without it: an undo still waiting at the end of it gives up,
@@ -321,8 +329,11 @@ export const register: Register = on => {
     const raw = (e as unknown as { ref?: unknown }).ref
     const ref = typeof raw === 'string' ? raw : ''
     if (!['', 'list'].includes(ref.trim())) {
-      const { decision } = await $.tool.check({ tool: e.tool as string, input: { ref } })
-      if (decision !== 'allow' && !(decision === 'ask' && await confirmed($, ref))) {
+      const verdict = await $.tool.check({ tool: e.tool as string, input: { ref } })
+      const endsBefore = sessionEnds()
+      const idBefore = await sessionId($)
+      if (verdict.decision !== 'allow' && !(verdict.decision === 'ask' && askable(verdict) && await confirmed($, ref)
+        && sessionEnds() === endsBefore && await sessionId($) === idBefore)) {
         return { result: `agent-undo: Claude Code did not allow this undo; nothing changed. You can type /agent-undo ${ref.trim().slice(0, 40)} yourself.` } as never
       }
     }

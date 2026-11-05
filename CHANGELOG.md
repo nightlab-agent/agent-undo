@@ -8,6 +8,9 @@
   (`tests/release-audit2.test.mjs`).
 - Where git ignores permissions (`core.filemode` false), a shell undo keeps an executable bit you set; `git restore`
   takes it away and said nothing (`tests/release-audit2.test.mjs`).
+- In plan mode Claude's undo stays refused: a yes no longer overrides the mode (`tests/review-dex-plan.test.tsx`). A
+  question left open when the conversation ends or clears is spent, so a late yes cannot land on the next conversation's
+  edit of the same number (`tests/review-dex-ask.test.tsx`).
 - Claude's undo tool now asks Claude Code first. Before, it answered with no permission step, so plan mode and deny
   rules did not stop it. An allow goes through; where Claude Code would ask, you get the question; a no, a closed
   question, a deny or a run with no one to answer changes nothing, and `/agent-undo` stays yours

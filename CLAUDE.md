@@ -16,6 +16,7 @@ the first tree, on the private index. `/agent-undo` and the model
 tool `mcp__agent-undo__undo` list them and undo one. Rules: a call and its answer
 are never changed; an undo writes only where the hunk's lines still read exactly
 as the edit left them, else it refuses and touches nothing; a created file is
-never deleted; the person's index and staged changes are never written; a failure of its own is swallowed; no network.
+never deleted; the person's index and staged changes are never written; a failure of its own never changes a call, and an undo's
+failure ends in its outcome line; no network.
 `sh tests/release.sh` must pass before every push. Who it is for:
 `01-context/purpose.md`.

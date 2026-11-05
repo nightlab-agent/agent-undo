@@ -60,6 +60,8 @@ async function reached($: EngineInterface, file: string) {
   return real !== undefined && fileKey(real) !== fileKey(file) ? { real } : {}
 }
 
+const firstLine = (err: unknown) => String((err as Error)?.message ?? err).split('\n')[0] ?? ''
+
 /**
  * The file as `text`, in one step: a new temporary file beside it with its permissions, then a rename, so an undo killed
  * halfway leaves the file whole (`$.fs.write` empties it first). `real` is where the checks found it. The answer is why
@@ -69,10 +71,10 @@ async function reached($: EngineInterface, file: string) {
 async function putBack($: EngineInterface, file: string, real: string, was: string, text: string) {
   const folder = real.slice(0, real.lastIndexOf('/') + 1)
   const run = (...argv: string[]) => $.process.run(argv, { cwd: folder || '.' })
-    .catch((err: unknown) => ({ exitCode: 1, stdout: '', stderr: String((err as Error)?.message ?? err) }))
+    .catch((err: unknown) => ({ exitCode: 1, stdout: '', stderr: firstLine(err) }))
   const said = (r: { stderr: string }) => r.stderr.trim().split('\n')[0]
   const moved = async () => ((await $.fs.stat(file, { resolve: true }).catch(() => undefined))?.realPath ?? file) !== real ||
-    (await $.fs.read(real)) !== was
+    (await $.fs.read(real).catch(() => undefined)) !== was
   const changed = 'changed during this undo'
   // mktemp makes the name its own, however long the file's is, and never takes a name already there.
   const made = await run('mktemp', `${folder}.agent-undo-${INDEX_TAG}-XXXXXXXX`)
@@ -82,11 +84,15 @@ async function putBack($: EngineInterface, file: string, real: string, was: stri
   try {
     const copy = await run('cp', '-p', real, tmp)
     if (copy.exitCode !== 0) return `could not be copied (${said(copy)})`
-    await $.fs.write(tmp, text)
+    // cp -p makes the copy read-only with a read-only file, and the write fails there, as it should.
+    try {
+      await $.fs.write(tmp, text)
+    } catch (err) {
+      return `could not be written (${firstLine(err)})`
+    }
     if (await moved()) return changed
     const mv = await run('mv', '-f', tmp, real)
-    if (mv.exitCode !== 0) throw new Error(mv.stderr.trim() || 'mv failed')
-    return undefined
+    return mv.exitCode !== 0 ? `could not be put in place (${said(mv)})` : undefined
   } finally {
     await run('rm', '-f', tmp)
   }
@@ -171,7 +177,7 @@ async function run($: EngineInterface, args: string): Promise<string> {
   try {
     text = await $.fs.read(c.file)
   } catch (err) {
-    return `agent-undo: ${shown(c.file)} could not be read (${String((err as Error)?.message ?? err).split('\n')[0]}); nothing changed.`
+    return `agent-undo: ${shown(c.file)} could not be read (${firstLine(err)}); nothing changed.`
   }
   const was = text
   if (text.includes('\uFFFD') && !(await holdsItsBytes($, c.file, text))) {
@@ -214,6 +220,10 @@ async function run($: EngineInterface, args: string): Promise<string> {
   return [`agent-undo: ${did}.`, ...notes].join('\n')
 }
 
+/** An undo's outcome line, always: a hook that throws is skipped, and the person would get the engine's words for plugin authors. */
+const outcome = ($: EngineInterface, args: string) => run($, args).catch((err: unknown) =>
+  `agent-undo: this undo stopped: ${firstLine(err)}. Read the file before you try again: it may already be changed.`)
+
 /** An Edit or Write with its entry in the list, in its file's queue: an undo behind it finds the entry. */
 const queued = <T,>(e: unknown, f: () => Promise<T>) => {
   const file = (e as { file_path?: unknown }).file_path
@@ -245,7 +255,7 @@ const undoing = async ($: EngineInterface, args: string, budgetMs = 10000) => {
   // so it cannot write after an answer that has gone. One that began is seen through.
   let began = false
   let late = false
-  const work = serial(undefined, () => { if (late) return Promise.resolve(''); began = true; return run($, args) })
+  const work = serial(undefined, () => { if (late) return Promise.resolve(''); began = true; return outcome($, args) })
   const bound = $.clock.sleep(Math.max(0, budgetMs - 1500)).then(() => true, () => false)
   const out = await Promise.race([work, bound])
   if (out !== true && out !== false) return out
@@ -326,7 +336,8 @@ export const register: Register = on => {
     const raw = (e as unknown as { ref?: unknown }).ref
     const ref = typeof raw === 'string' ? raw : ''
     if (!['', 'list'].includes(ref.trim())) {
-      const verdict = await $.tool.check({ tool: e.tool as string, input: { ref } })
+      // A check that fails is no allow, and a hook that throws would leave the person no line.
+      const verdict = await $.tool.check({ tool: e.tool as string, input: { ref } }).catch((): { decision: string; reason?: string; plugin?: string } => ({ decision: 'failed' }))
       const endsBefore = sessionEnds()
       const idBefore = await sessionId($)
       if (verdict.decision !== 'allow' && !(verdict.decision === 'ask' && askable(verdict) && await confirmed($, ref)

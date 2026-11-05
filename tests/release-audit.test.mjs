@@ -284,7 +284,7 @@ test('A6: a write killed after truncation must not lose the whole file', async t
   const before = await w.read('a.txt')
   w.beforeWrite = path => execFileSync(process.execPath, ['-e',
     "require('node:fs').openSync(process.argv[1], 'w'); process.kill(process.pid, 'SIGKILL')", path])
-  await assert.rejects(w.undo('1'))
+  assert.match(await w.undo('1'), /nothing changed/)
   assert.equal(await w.read('a.txt'), before)
 })
 test('A6 comparison: a write refused before opening the file preserves its content', async t => {
@@ -294,7 +294,7 @@ test('A6 comparison: a write refused before opening the file preserves its conte
   await w.write('a.txt', await w.read('a.txt') + 'UNCOMMITTED PERSONAL WORK\n')
   const before = await w.read('a.txt')
   w.beforeWrite = () => { throw new Error('EACCES before open') }
-  await assert.rejects(w.undo('1'))
+  assert.match(await w.undo('1'), /nothing changed/)
   assert.equal(await w.read('a.txt'), before)
 })
 

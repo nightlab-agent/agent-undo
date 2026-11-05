@@ -288,8 +288,7 @@ for (const readonly of [false, true]) {
     w.beforeWrite = path => execFileSync(process.execPath, ['-e',
       "require('node:fs').openSync(process.argv[1], 'w'); process.kill(process.pid, 'SIGKILL')", path])
     try {
-      if (readonly) assert.match(await w.undo('1'), /nothing changed/)
-      else await assert.rejects(w.undo('1'))
+      assert.match(await w.undo('1'), /nothing changed/)
       assert.equal(await w.read('dir/a.txt'), 'ONE\n', 'a killed undo must leave the user file whole')
     } finally { await fs.chmod(join(w.root, 'dir'), 0o755) }
   })
@@ -323,7 +322,7 @@ test('putBack crash: a long valid filename must also remain whole', async t => {
   await w.edit(name, 'one', 'ONE')
   w.beforeWrite = path => execFileSync(process.execPath, ['-e',
     "require('node:fs').openSync(process.argv[1], 'w'); process.kill(process.pid, 'SIGKILL')", path])
-  await assert.rejects(w.undo('1'))
+  assert.match(await w.undo('1'), /nothing changed/)
   t.diagnostic(JSON.stringify(w.results.filter(r => r.argv[0] === 'cp')))
   assert.equal(await w.read(name), 'ONE\n')
 })
@@ -464,7 +463,7 @@ test('undo tool: lists without permission; a failed check cannot write', async t
   w.permission = new Error('permission service failed')
   assert.match((await w.toolUndo('list')).result, /a.txt/)
   assert.equal(w.checks.length, 0)
-  await assert.rejects(w.toolUndo('1'), /permission service failed/)
+  assert.match((await w.toolUndo('1')).result, /did not allow/)
   assert.equal(await w.read('a.txt'), 'ONE\n')
 })
 
@@ -721,7 +720,7 @@ const shellMade = t => async () => {
   return w
 }
 for (const [kind, made, whole] of [['Edit', editMade, ['one\n', 'ONE\n']], ['shell', shellMade, ['one\n', 'ONE\n']]]) {
-  test(`every step of a ${kind} undo that cannot start answers a line and leaves the file whole`, kind === 'Edit' ? { todo: 'a rejected mv, the next commit' } : {}, async t => {
+  test(`every step of a ${kind} undo that cannot start answers a line and leaves the file whole`, async t => {
     const all = await steps(made(t), w => w.undo('1'))
     assert.ok(all.length >= 3, all.join(', '))
     const bad = []
@@ -776,6 +775,55 @@ test('a machine with no cp refuses, leaving the file and no copy', async t => {
   assert.match(await w.undo('1'), /could not be copied \(spawn cp ENOENT\); nothing changed/)
   assert.equal(await w.read('a.txt'), 'ONE\n')
   assert.equal((await fs.readdir(w.root)).filter(n => n.startsWith('.agent-undo-')).length, 0)
+})
+
+
+// ---- The outcome line comes, whatever goes wrong inside the copy.
+test('comparison: a cp that fails answers a line', async t => {
+  const w = await world(t, { 'a.txt': 'one\n' })
+  await w.edit('a.txt', 'one', 'ONE')
+  wrapRun(w, (argv, init, run) => (argv[0] === 'cp' ? Promise.resolve({ exitCode: 1, stdout: '', stderr: 'cp: no' }) : run(argv, init)))
+  assert.match(await w.undo('1'), /could not be copied.*nothing changed/)
+})
+for (const [way, answer] of [['fails', () => Promise.resolve({ exitCode: 1, stdout: '', stderr: 'mv: cannot move: Device or resource busy' })],
+  ['cannot start', () => Promise.reject(new Error('spawn mv EAGAIN'))]]) {
+  test(`a mv that ${way} answers a line, and neither the file nor a copy changes`, async t => {
+    const w = await world(t, { 'a.txt': 'one\n' })
+    await w.edit('a.txt', 'one', 'ONE')
+    wrapRun(w, (argv, init, run) => (argv[0] === 'mv' ? answer() : run(argv, init)))
+    assert.match(await w.undo('1'), /a\.txt could not be put in place \(.*\); nothing changed/)
+    assert.equal(await w.read('a.txt'), 'ONE\n')
+    assert.equal((await fs.readdir(w.root)).filter(n => n.startsWith('.agent-undo-')).length, 0)
+  })
+}
+test('a file deleted during the undo says changed', async t => {
+  const w = await world(t, { 'a.txt': 'one\n' })
+  await w.edit('a.txt', 'one', 'ONE')
+  w.beforeWrite = async p => { if (p.includes('.agent-undo-')) await fs.unlink(join(w.root, 'a.txt')) }
+  assert.match(await w.undo('1'), /changed during this undo; nothing changed/)
+  assert.equal((await fs.readdir(w.root)).filter(n => n.startsWith('.agent-undo-')).length, 0)
+})
+test('a read-only file answers a line', async t => {
+  const w = await world(t, { 'a.txt': 'one\n' })
+  await w.edit('a.txt', 'one', 'ONE')
+  await fs.chmod(join(w.root, 'a.txt'), 0o444)
+  assert.match(await w.undo('1'), /a\.txt could not be written \(.*\); nothing changed/)
+  assert.equal(await w.read('a.txt'), 'ONE\n')
+  assert.equal((await fs.readdir(w.root)).filter(n => n.startsWith('.agent-undo-')).length, 0)
+})
+test('the backstop: a failure no step expected still answers a line', async t => {
+  const w = await world(t, { 'a.txt': 'one\n' })
+  await w.edit('a.txt', 'one', 'ONE')
+  w.engine.fs.exists = async () => { throw new Error('EIO: i/o error') }
+  assert.match(await w.undo('1'), /^agent-undo: this undo stopped: EIO: i\/o error\. /)
+})
+test('a list that cannot be updated after the write: the line does not say nothing changed', async t => {
+  const w = await world(t, { 'a.txt': 'one\n' })
+  await w.edit('a.txt', 'one', 'ONE')
+  w.engine._atoms.set = () => { throw new Error('state refused') }
+  const out = await w.undo('1')
+  assert.match(out, /^agent-undo: this undo stopped: state refused\. .*already be changed/)
+  assert.equal(await w.read('a.txt'), 'one\n')
 })
 
 }

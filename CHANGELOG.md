@@ -34,6 +34,8 @@
 - A repo git refuses (dubious ownership) now shows git's line. Before, nothing was recorded and nothing was said.
 - A first snapshot may take 60 s, not 20. A killed one recorded nothing on a large repo.
 - An undo still waiting near the end of its hook budget gives up and says so, instead of writing after its answer.
+- Every undo ends in its outcome line. A `mv` that fails, a read-only file, a file deleted during the undo and a failure
+  no step expected used to leave as a hook failure, and the person read Claude Code's message for plugin authors.
 - A file too large to read answers with a line instead of an error. A store eviction spares a session saved since the
   scan. A failed release no longer depends on `tests/release.sh` missing the real-file tests: they run there now.
 - The npm package carries `hooks/hunks.tsx`. A release from before this line would not have loaded: `hooks/register.tsx` imports that file

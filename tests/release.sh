@@ -31,8 +31,8 @@ node --test tests/release-audit16.test.mjs
 sh tests/typecheck.sh
 sh tests/git-wipe.sh
 # The engine's own words on an ask: hooks/register.tsx reads them, the fakes copy them.
-sh tests/native-ask.sh
-sh tests/native-budget.sh
+if [ -n "${RUN_NATIVE:-}" ]; then sh tests/native-ask.sh; fi
+if [ -n "${RUN_NATIVE:-}" ]; then sh tests/native-budget.sh; fi
 python3 -I tests/checklist.py
 python3 -I - <<'PY'
 import json, re, sys

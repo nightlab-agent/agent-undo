@@ -109,6 +109,9 @@ came back as committed, and `notes.txt` stayed.
   record uses, so shell commands are not recorded and the list says so; your
   real index is never used instead (tested with a fake git that answers as the
   audit reports 2.30 does; no older git was run).
+- A file under a git clean filter (nbstripout, say) is left as it is: a filter can
+  hide a later change. A deleted file whose folder is now a file or a link is
+  left as it is too: git would replace what stands there.
 - A changed or deleted file comes back as it was just before the command,
   your uncommitted changes included. It is put back only if it still reads
   exactly as the command left it (or, if the command deleted it, nothing is

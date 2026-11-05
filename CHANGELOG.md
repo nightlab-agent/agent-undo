@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased
+- A shell undo no longer replaces what stands where a deleted file's folder was. Before, a file or link saved at
+  that folder's name was replaced by the folder, and that file was in no snapshot, so it was lost; a link leading
+  nowhere at the file's own path was replaced too. Now each is refused (`tests/shell-undo.test.tsx`, fake git; real
+  git's replacing in `tests/git-wipe.sh`).
+- A shell undo refuses a file under a git clean filter. Before, a filter such as nbstripout could make the person's
+  later change hash the same as the command's, and the undo overwrote it. A deleted file still comes back
+  (`tests/shell-undo.test.tsx`; the attribute read in `tests/git-wipe.sh`).
 - An undo no longer reverts a look-alike. Before, one match anywhere in the file was taken, and later
   edits did not move a hunk's place, so where two blocks read the same the undo could change the block the edit
   never touched and say it worked. Hunks now follow later edits and undos, and an undo acts only at that

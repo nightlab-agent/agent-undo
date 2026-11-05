@@ -40,6 +40,10 @@ export type Repo = {
   locked: boolean
   /** git gc removed objects the private index still names: its next write-tree fails until it is seeded again. */
   pruned: boolean
+  /** Paths that are symbolic links; a link that leads nowhere is `other` to the engine's stat, as a real one is. */
+  links: Set<string>
+  /** `.gitattributes` as git reads it: the filter set on a path. */
+  filters: Record<string, string>
   /** Any other tool (an MCP tool, or an unknown one), by name: what it does to the files; 'error' answers an
    * error, 'read-only' answers as core does a call the tool held read-only (`isReadOnly`). */
   tools: Record<string, (f: Map<string, string>) => void | 'error' | 'read-only' | Promise<void | 'error' | 'read-only'>>
@@ -50,7 +54,7 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
   const IDX = `${top}/.git/agent-undo.index`
   const repo: Repo = {
     files: new Map(Object.entries(files0).map(([k, v]) => [`${ROOT}/${k}`, v])),
-    runs: [], envs: [], git: opts.git ?? true, scripts: {}, adds: 0, verdict: 'allow', locked: false, pruned: false, tools: {},
+    runs: [], envs: [], git: opts.git ?? true, scripts: {}, adds: 0, verdict: 'allow', locked: false, pruned: false, links: new Set(), filters: {}, tools: {},
   }
   const trees = new Map<string, Map<string, string>>()
   const rel = (p: string) => p.slice(ROOT.length + 1)
@@ -64,6 +68,14 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
   on('ui.status', () => ({ value: undefined }) as never)
   if (repo.git) repo.files.set(`${ROOT}/.git/index`, 'real index')
   on('fs.exists', (_, e) => ({ value: repo.files.has(real(e.path)) }))
+  // As the engine's stat: rejects for a missing path, so also below a file; a folder is any path with files under it.
+  on('fs.stat', (_, e) => {
+    const p = real(e.path)
+    const isLink = repo.links.has(p)
+    const dir = [...repo.files.keys()].some(k => k.startsWith(`${p}/`))
+    if (!isLink && !dir && !repo.files.has(p)) throw new Error('ENOENT')
+    return { value: { kind: isLink && !repo.files.has(p) && !dir ? 'other' : dir ? 'dir' : 'file', size: 0, mtimeMs: 0, isLink } as never }
+  })
   on('fs.read', (_, e) => {
     const t = repo.files.get(real(e.path))
     if (t === undefined) throw new Error('ENOENT')
@@ -105,6 +117,7 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
       }
       return ok(out)
     }
+    if (a.slice(0, 4).join(' ') === 'git check-attr -z filter' && a[4] === '--') return ok(`${a[5]}\0filter\0${repo.filters[a[5]!] ?? 'unspecified'}\0`)
     if (a.slice(0, 3).join(' ') === 'git hash-object --') {
       const t = repo.files.get(`${ROOT}/${a[3]}`)
       return t === undefined ? fail('fatal: no such file') : ok(`${blob(t)}\n`)

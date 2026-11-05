@@ -192,6 +192,24 @@ const commandLabel = (command: unknown) => {
   const first = String(command ?? '').trim().split('\n')[0] ?? ''
   return first.length > 60 ? `${first.slice(0, 59)}…` : first
 }
+/** The nearest parent of `path` that is no longer a folder: real git would replace it to bring the file back. */
+async function inTheWay($: EngineInterface, top: string, path: string) {
+  const parts = path.split('/').slice(0, -1)
+  for (let i = 1; i <= parts.length; i++) {
+    const parent = parts.slice(0, i).join('/')
+    const s = await $.fs.stat(`${top}/${parent}`).catch(() => undefined)
+    if (!s) return undefined
+    if (s.isLink || s.kind !== 'dir') return parent
+  }
+  return undefined
+}
+
+/** A clean filter (nbstripout, say) can make two different files hash the same, so a hash cannot show the file is unchanged. */
+async function filtered($: EngineInterface, top: string, path: string) {
+  const value = (await git($, ['check-attr', '-z', 'filter', '--', path], top)).split('\0')[2]
+  return value !== undefined && value !== 'unspecified' && value !== 'unset'
+}
+
 /**
  * Puts back files a shell command changed or deleted, each from the tree before the command,
  * only where the file still reads as the command left it (or, deleted, is still absent).
@@ -212,8 +230,14 @@ export async function undoShell($: EngineInterface, c: Change, h: number | undef
     if (f.status === 'A') { notes.push(`${ref} left as is: ${name} is a new file; nothing was there before. Delete it yourself if you want it gone.`); continue }
     try {
       const there = await $.fs.exists(`${c.top}/${f.path}`)
-      if (f.status === 'D' && there) { notes.push(`${ref} left as is: there is a file at ${name} again`); continue }
+      // A stat, not exists: exists says no to a link that leads nowhere, and git would replace it.
+      if (f.status === 'D' && (there || await $.fs.stat(`${c.top}/${f.path}`).catch(() => undefined))) { notes.push(`${ref} left as is: there is a file at ${name} again`); continue }
+      if (f.status === 'D') {
+        const parent = await inTheWay($, c.top, f.path)
+        if (parent !== undefined) { notes.push(`${ref} left as is: ${shown(spelled(c, parent))} is no longer a folder; putting ${name} back would replace it`); continue }
+      }
       if (f.status !== 'D') {
+        if (await filtered($, c.top, f.path)) { notes.push(`${ref} left as is: ${name} goes through a git filter, which can hide a later change`); continue }
         const now = there ? (await git($, ['hash-object', '--', f.path], c.top)).trim() : ''
         if (now !== f.after) { notes.push(`${ref} left as is: ${name} has changed since the ${c.tool === 'MCP' ? 'call' : 'command'}`); continue }
       }

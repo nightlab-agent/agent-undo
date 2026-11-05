@@ -67,4 +67,15 @@ fresh; A=$(snap); git clean -qfdx; B=$(snap)
 [ "$(changed "$A" "$B")" = 'D notes.txt ' ] || fail "clean -x: listed [$(changed "$A" "$B")]"
 [ ! -e build/out.bin ] || fail "clean -x: expected the ignored file gone"
 
+# 7. Why a shell undo checks a deleted file's folder: real git replaces a person's file with the folder.
+fresh; mkdir -p d; printf 'x\n' > d/f.txt; A=$(snap); rm -rf d; printf 'mine\n' > d
+GIT_INDEX_FILE="$IDX" git restore --source="$A" --worktree -- ':(literal)d/f.txt' 2>/dev/null
+[ -d d ] || fail "restore over a file: git no longer replaces it, so the refusal has no reason to exist"
+
+# 8. What the refusal of a filtered file reads: the filter's name, or unspecified.
+fresh; printf '*.nb filter=strip\n' > .gitattributes
+[ "$(git check-attr -z filter -- n.nb | tr '\0' ' ')" = 'n.nb filter strip ' ] || fail "check-attr: filter set"
+[ "$(git check-attr -z filter -- a.txt | tr '\0' ' ')" = 'a.txt filter unspecified ' ] || fail "check-attr: no filter"
+
+echo "PASS a deleted file's folder replaced by git; check-attr's answer"
 echo "PASS checkout --, restore, reset --hard, clean -fd, stash -u: the person's uncommitted work comes back; clean -fdx: an ignored file is not recorded (the limit)"

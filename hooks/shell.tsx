@@ -107,7 +107,9 @@ export function onIndex<T>($: EngineInterface, f: () => Promise<T>): Promise<T> 
   const p = snaps.then(f)
   snaps = snaps.then(async () => {
     const stop = new AbortController()
-    await Promise.race([p.catch(() => undefined), $.clock.sleep(HOLD_MS, { signal: stop.signal }).catch(() => undefined)])
+    const turn = p.catch(() => undefined)
+    // A sleep refused (a mod above denies it) is no bound: the queue waits for the turn, as it did before there was one.
+    await Promise.race([turn, $.clock.sleep(HOLD_MS, { signal: stop.signal }).catch(() => turn)])
     stop.abort()
   })
   return p

@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- The npm package carries `hooks/hunks.tsx`. A release from before this line would not have loaded: `hooks/register.tsx` imports that file
+  and the package's file list left it out. 0.2.2 is not affected. The release check now fails when a packed hook imports an unpacked file.
 - An Edit through a linked folder during a command stays with the Edit. Before, git's real path and the Edit's path
   did not match, so the file was listed under the command too. Paths are now compared by where they land
   (`tests/symlink-edit.test.tsx`; the test world walks links as the declarations say, no real link was followed).

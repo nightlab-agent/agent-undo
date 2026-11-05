@@ -90,6 +90,19 @@ if pkg_path.is_file():
           'package.json repository is the plugin\'s own GitHub repo', f'{url} (plugin.json: {want})')
     missing = [f for f in pkg.get('files', []) if not (ROOT / f.rstrip('/')).exists()]
     check(not missing, 'every package.json files entry exists', ', '.join(missing))
+    def packed(path):
+        return any(path == f.rstrip('/') or path.startswith(f.rstrip('/') + '/') for f in pkg.get('files', []))
+    unpacked = set()
+    for src in ROOT.glob('hooks/**/*.ts*'):
+        if not packed(src.as_posix()):
+            continue
+        # A type-only import leaves no trace when it runs; any other one must be in the package.
+        for spec in re.findall(r"^\s*(?:import|export)\s+(?!type\b)[^'\"]*?from\s+['\"](\.{1,2}/[^'\"]+)['\"]", src.read_text(), re.M):
+            target = (src.parent / spec).resolve().relative_to(ROOT.resolve())
+            found = [c for c in (target, target.with_name(target.name + '.ts'), target.with_name(target.name + '.tsx')) if c.is_file()]
+            if found and not packed(found[0].as_posix()):
+                unpacked.add(f'{src.as_posix()} imports {found[0].as_posix()}')
+    check(not unpacked, 'every file a packed hook imports is in package.json files', '; '.join(sorted(unpacked)))
     check(not pkg.get('private'), 'package.json is not private')
     check('publishConfig' not in pkg, 'package.json has no publishConfig',
           'it can send the package to another registry or access level; pass --access public on the first release instead')

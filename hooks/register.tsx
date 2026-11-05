@@ -265,10 +265,17 @@ const notUndone: Record<Why, string> = {
 /**
  * Waits out the hook's own time: the engine's budget stands still during a `$` call, so a wall clock alone would stop
  * an undo on a slow drive. With no budget to read it waits once. The floor keeps a budget paused just above the
- * margin from spinning the clock; the ceiling keeps an unmetered Infinity out of a sleep the engine refuses.
+ * margin from spinning the clock, and applies only once a look found it had not moved, so a running budget is met on
+ * time; the ceiling keeps an unmetered Infinity out of a sleep the engine refuses.
  */
 const budgetEnds = async ($: EngineInterface, left: () => number | undefined, turn: Turn, signal: AbortSignal) => {
-  for (let ms = (left() ?? 10000) - 1500; ms > 0; ms = (left() ?? 0) - 1500) await $.clock.sleep(Math.min(Math.max(ms, 250), 60000), { signal })
+  let ms = (left() ?? 10000) - 1500, floor = 0
+  while (ms > 0) {
+    await $.clock.sleep(Math.min(Math.max(ms, floor), 60000), { signal })
+    const next = (left() ?? 0) - 1500
+    floor = next < ms ? 0 : 250
+    ms = next
+  }
   turn.say('budget')
 }
 const undoing = async ($: EngineInterface, args: string, left: () => number | undefined, signal?: AbortSignal) => {

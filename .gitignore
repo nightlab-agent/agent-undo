@@ -3,3 +3,4 @@
 *.log
 tsconfig.json
 node_modules/
+scratch-*/

@@ -4,6 +4,7 @@
 // HookBudget.ms: "past it the hook is absent (its `.catch` asked, else `next(e)` run on its behalf)"). An Edit queued
 // behind an undo waits on a plain promise, not a `$` call, so its clock runs while the undo's stands still.
 // Run: CC_TYPES=... node --test tests/review-budget.test.mjs
+import { tmpdir } from 'node:os'
 import { after, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
@@ -15,7 +16,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const source = resolve(here, '..')
-const scratch = await fs.mkdtemp(join(process.env.REVIEW_SCRATCH ?? resolve(here, '..'), 'scratch-review-budget-'))
+const scratch = await fs.mkdtemp(join(process.env.REVIEW_SCRATCH ?? tmpdir(), 'scratch-review-budget-'))
 after(() => fs.rm(scratch, { recursive: true, force: true }))
 const compiled = join(scratch, 'compiled')
 const types = process.env.CC_TYPES ?? join(source, '.claude-plugin/types/claude-code/index.d.ts')

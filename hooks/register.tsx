@@ -2,7 +2,7 @@ import { atom, read } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Change, Hunk } from '../types'
-import { acrossUndo, followed, hunksFrom, undoAt } from './hunks'
+import { acrossUndo, followed, hunksFrom, onceIn, undoAt } from './hunks'
 import type { Move, Patch } from './hunks'
 import { editing, fileKey, forgetRestore, record, restoreList, serial, showNewest, slashed, snapped, time, updateList } from './common'
 import { ownTool, registerShell, resetShells, shellStopped, spelled, undoShell } from './shell'
@@ -102,11 +102,13 @@ async function run($: EngineInterface, args: string): Promise<string> {
   let text = await $.fs.read(c.file)
   const undone: number[] = []
   const notes: string[] = []
-  const hs = c.hunks.map(h => ({ ...h }))
   const moves: Move[] = []
+  // Only a line this undo put back can make a look-alike of a hunk still to come.
+  const back = new Set<string>()
+  const clear = (after: string[]) => !after.some(l => back.has(l))
   // Last hunk first, so each recorded line number still points at its own hunk.
   for (const k of [...picked].sort((a, b) => b - a)) {
-    const h = hs[k]!
+    const h = acrossUndo(c.hunks[k]!, moves, clear)
     if (h.undone) { notes.push(`${c.n}.${k + 1} was already undone`); continue }
     const got = undoAt(text, h)
     if ('refused' in got) { notes.push(`${c.n}.${k + 1} left as is: ${got.refused}`); continue }
@@ -115,16 +117,18 @@ async function run($: EngineInterface, args: string): Promise<string> {
     // Every hunk below moved by the lines this one put back, and every hunk's count of the file's lines changed.
     const { head, minus, plus } = counted(h)
     moves.push({ at: got.at + head, cut: plus, put: minus })
-    for (const [j, o] of hs.entries()) hs[j] = o === h ? o : acrossUndo(o, moves.slice(-1), text)
+    for (const l of h.before) back.add(l)
   }
   if (undone.length > 0) {
     // An open window (a Bash command or MCP call running now) must not take this undo as its change.
     // editing() also covers a window that opens while the write is in flight.
     // user file: an undo puts the user's own file back as it was.
     await editing(c.file, () => $.fs.write(c.file, text))
-    const hunks = hs.map((h, k) => (undone.includes(k) ? { ...h, undone: true } : h))
+    const once = onceIn(text)
+    const gone = new Set(undone)
+    const hunks = c.hunks.map((o, k) => { const h = acrossUndo(o, moves, once); return gone.has(k) ? { ...h, undone: true } : h })
     await updateList($, all => all.map(x => x.n === c.n ? { ...x, hunks }
-      : fileKey(x.file) === fileKey(c.file) ? { ...x, hunks: x.hunks.map(h => acrossUndo(h, moves, text)) } : x))
+      : fileKey(x.file) === fileKey(c.file) ? { ...x, hunks: x.hunks.map(h => acrossUndo(h, moves, once)) } : x))
   }
   const did = undone.length > 0
     ? `undid ${[...undone].sort((a, b) => a - b).map(k => `${c.n}.${k + 1}`).join(', ')} in ${shown(c.file)}`

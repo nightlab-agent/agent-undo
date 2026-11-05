@@ -44,6 +44,26 @@ const places = (rows: Row[], after: string[]) => {
   return at
 }
 
+/** A check of whether some lines stand exactly once in `rows`: an index built once, so many hunks cost no walk of the file each. */
+export type Once = (after: string[]) => boolean
+const standsOnce = (rows: Row[]): Once => {
+  const by = new Map<string, number[]>()
+  for (const [i, r] of rows.entries()) {
+    const seen = by.get(r.t)
+    if (seen) seen.push(i)
+    else by.set(r.t, [i])
+  }
+  return after => {
+    let found = 0
+    for (const i of by.get(after[0]!) ?? []) {
+      if (after.every((l, j) => rows[i + j]?.t === l) && ++found > 1) return false
+    }
+    return found === 1
+  }
+}
+/** The same check on a file's text. */
+export const onceIn = (text: string) => standsOnce(rowsOf(text))
+
 /** A line as the engine's diff shows it: `structuredPatch` is display text, each leading tab two spaces (convertTabs). */
 const shownAs = (line: string) => line.replace(/^\t+/gm, tabs => '  '.repeat(tabs.length))
 
@@ -58,6 +78,7 @@ export const hunksFrom = (patch: Patch, was: unknown, now: string | undefined): 
   if (typeof was !== 'string') return undefined
   const [old, next] = [rowsOf(was), rowsOf(now ?? '')]
   const hunks = hunksOf(patch)
+  const once = standsOnce(next)
   for (const [k, h] of hunks.entries()) {
     const at = { old: (patch[k]!.oldStart ?? 0) - 1, next: h.line - 1 }
     const before = h.before.map((l, j) => { const t = old[at.old + j]?.t; return t !== undefined && shownAs(t) === l ? t : undefined })
@@ -67,7 +88,7 @@ export const hunksFrom = (patch: Patch, was: unknown, now: string | undefined): 
     h.after = h.after.map((l, j) => { const t = next[at.next + j]?.t; return t !== undefined && shownAs(t) === l.replace(/\r$/, '') ? t : l })
     if (now !== undefined) {
       h.total = next.length
-      if (places(next, h.after).length === 1) h.alone = true
+      if (once(h.after)) h.alone = true
     }
   }
   return hunks
@@ -131,25 +152,25 @@ const movedBy = (patch: Patch, line: number) => {
   return by
 }
 
-const tracked = (h: Hunk, line: number, grown: number, rows: Row[] | undefined): Hunk => {
+const tracked = (h: Hunk, line: number, grown: number, once: Once | undefined): Hunk => {
   const { alone, ...rest } = h
-  const still = alone === true && rows !== undefined && places(rows, h.after).length === 1
+  const still = alone === true && once !== undefined && once(h.after)
   return { ...rest, line, ...(h.total === undefined ? {} : { total: h.total + grown }), ...(still ? { alone: true } : {}) }
 }
 
 /** Every listed hunk of `file` after a later edit: each moves with the lines above it, whatever happened to the file's
  * length otherwise stays visible in `total`. With no diff to follow (it timed out), its place is unknown: line 0. */
 export const followed = (list: readonly Change[], file: string, patch: Patch, now: string | undefined): Change[] => {
-  const rows = now === undefined ? undefined : rowsOf(now)
+  const once = now === undefined ? undefined : onceIn(now)
   const grown = movedBy(patch, Infinity)
   return list.map(c => (fileKey(c.file) !== fileKey(file) ? c : {
-    ...c, hunks: c.hunks.map(h => tracked(h, patch.length > 0 ? h.line + movedBy(patch, h.line - 1) : 0, grown, rows)),
+    ...c, hunks: c.hunks.map(h => tracked(h, patch.length > 0 ? h.line + movedBy(patch, h.line - 1) : 0, grown, once)),
   }))
 }
 
-/** One hunk after an undo in its file: `moves` in the order they were made, `text` the file now. */
-export const acrossUndo = (h: Hunk, moves: Move[], text: string): Hunk => {
+/** One hunk after an undo in its file: `moves` in the order they were made, `once` asked of the file as it stands. */
+export const acrossUndo = (h: Hunk, moves: Move[], once: Once): Hunk => {
   let line = h.line - 1
   for (const m of moves) if (line >= m.at + m.cut) line += m.put - m.cut
-  return tracked(h, line + 1, moves.reduce((s, m) => s + m.put - m.cut, 0), rowsOf(text))
+  return tracked(h, line + 1, moves.reduce((s, m) => s + m.put - m.cut, 0), once)
 }

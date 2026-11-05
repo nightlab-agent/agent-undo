@@ -51,20 +51,25 @@ const world = (on: On, files0: Record<string, string>) => {
     const was = files.get(x.file_path)!
     const fill = /^fill:(\d+)$/.exec(x.new_string)
     if (fill) {
+      // The result's strings and diff say what the file became, as the engine's do: the mod works the new text out from them.
       const n = Number(fill[1])
-      files.set(x.file_path, 'L\n'.repeat(n))
-      return { result: { filePath: x.file_path, oldString: x.old_string, newString: x.new_string, originalFile: was,
-        structuredPatch: Array.from({ length: n }, (_, k) => ({ oldStart: k + 1, oldLines: 0, newStart: k + 1, newLines: 1, lines: ['+L'] })),
+      const newString = `seed\n${'L\n'.repeat(n - 1)}L`
+      files.set(x.file_path, was.replace(x.old_string, newString))
+      return { result: { filePath: x.file_path, oldString: x.old_string, newString, originalFile: was,
+        structuredPatch: Array.from({ length: n }, (_, k) => ({ oldStart: 2, oldLines: 0, newStart: k + 2, newLines: 1, lines: ['+L'] })),
         userModified: false, replaceAll: false } } as never
     }
-    files.set(x.file_path, was.replace(x.old_string, x.new_string))
+    // `wide:<n>`: an edit that rewrote n lines of 1100 characters (under MAX_LINES, so kept hunk by hunk): the file held
+    // the old block where `old_string` stands, and the result's strings and diff agree with it, as the engine's do.
     const m = /^wide:(\d+)$/.exec(x.new_string)
-    const lines = m
-      ? [...Array.from({ length: Number(m[1]) / 2 }, (_, k) => `-${String(k).padStart(4, '0')}${'x'.repeat(1096)}`),
-        ...Array.from({ length: Number(m[1]) / 2 }, (_, k) => `+${String(k).padStart(4, '0')}${'y'.repeat(1096)}`)]
-      : [`-${x.old_string}`, `+${x.new_string}`]
-    return { result: { filePath: x.file_path, oldString: x.old_string, newString: x.new_string, originalFile: was,
-      structuredPatch: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines }],
+    const block = (c: string) => Array.from({ length: Number(m![1]) / 2 }, (_, k) => `${String(k).padStart(4, '0')}${c.repeat(1096)}`)
+    const [before, after] = m ? [block('x'), block('y')] : [[x.old_string], [x.new_string]]
+    const line = was.split('\n').indexOf(x.old_string) + 1
+    const [oldString, newString] = [before.join('\n'), after.join('\n')]
+    files.set(x.file_path, was.replace(x.old_string, newString))
+    return { result: { filePath: x.file_path, oldString, newString, originalFile: was.replace(x.old_string, oldString),
+      structuredPatch: [{ oldStart: line, oldLines: before.length, newStart: line, newLines: after.length,
+        lines: [...before.map(l => `-${l}`), ...after.map(l => `+${l}`)] }],
       userModified: false, replaceAll: false } } as never
   })
   return w
@@ -110,6 +115,7 @@ test('review-store-room S1 comparison: the same nine edits beside one other 250 
   other(w, 'x1', 1, 250)
   await start($)
   await wide($, 9)
+  expect(w.stateSets.at(-1)!).toBeGreaterThan(3_900_000)
   console.log(`S1c store keys after edit 9: ${[...w.disk.keys()].join(' ')}; store refusals: ${w.refused.join(' | ')}`)
   expect(w.disk.has('changes:s1')).toBe(true)
   await restart($, w)
@@ -118,36 +124,37 @@ test('review-store-room S1 comparison: the same nine edits beside one other 250 
 
 // U1 (kind 4): fit() bounds record() and restore(), but an undo's list update (register.tsx:185, shell.tsx:212) is not
 // fitted: each hunk it marks adds `,"undone":true` (14 characters). With the list under MAX_CHARS by design, the room
-// to the engine's cap is 194,304 characters, which 13,880 marked hunks fill. 24 edits of 4,000 one-line insertions and
-// a topper bring the list to about 3.99 MB; undoing five of them whole adds 5 × 45,107 characters (measured), past the cap at the fifth.
+// to the engine's cap is 194,304 characters, which 13,880 marked hunks fill. 22 edits of 4,000 one-line insertions and
+// a topper bring the list to about 3.99 MB; undoing five of them whole adds about 14 characters a hunk, past the cap at the fourth.
 const fillList = async ($: $T, w: W) => {
-  for (let k = 0; k < 24; k++) await edit($, `f${k}.txt`, 'seed', 'fill:4000')
+  for (let k = 0; k < 22; k++) await edit($, `f${k}.txt`, 'seed', 'fill:4000')
   // A topper under 1,104 characters a line brings the list to about 3,999,000 characters without dropping an entry.
   const room = 3_999_000 - w.stateSets.at(-1)!
   const lines = Math.max(2, Math.floor(room / 1104 / 2) * 2)
   await edit($, 'a.txt', 'l1', `wide:${lines}`)
-  console.log(`U1 list JSON after 24 fills and a ${lines}-line topper: ${w.stateSets.at(-1)} characters; entries: ${(w.state.get('agent-undo/changes/')?.value as unknown[]).length}`)
+  expect(w.stateSets.at(-1)!).toBeGreaterThan(3_950_000)
+  console.log(`U1 list JSON after 22 fills and a ${lines}-line topper: ${w.stateSets.at(-1)} characters; entries: ${(w.state.get('agent-undo/changes/')?.value as unknown[]).length}`)
 }
-const seeds = Object.fromEntries(Array.from({ length: 24 }, (_, k) => [`f${k}.txt`, 'seed\n']))
+const seeds = Object.fromEntries(Array.from({ length: 22 }, (_, k) => [`f${k}.txt`, 'seed\n']))
 
-test('review-store-room U1: with the list near its cap, undoing five 4,000-hunk edits whole; each undo answers "undid" and marks its hunks', { timeoutMs: 400000 }, async ($, on) => {
+test('review-store-room U1: with the list near its cap, undoing five 4,000-hunk edits whole; each undo answers "undid" and marks its hunks', { timeoutMs: 120000 }, async ($, on) => {
   const w = world(on, { ...seeds, 'a.txt': tenLines })
   await start($)
   await fillList($, w)
   const got: string[] = []
-  for (const n of [24, 23, 22, 21, 20]) {
+  for (const n of [22, 21, 20, 19, 18]) {
     const text = await undoOr($, String(n))
     got.push(`#${n}: ${text.split('\n')[0]!.slice(0, 90)} | f${n - 1}.txt now ${w.files.get(`${ROOT}/f${n - 1}.txt`)!.length} chars | list ${w.stateSets.at(-1)} chars`)
   }
   console.log(`U1 undos:\n${got.join('\n')}`)
   for (const g of got) expect(g).toContain('undid')
 })
-test('review-store-room U1 comparison: the same list, four such undos; each answers "undid"', { timeoutMs: 400000 }, async ($, on) => {
+test('review-store-room U1 comparison: the same list, four such undos; each answers "undid"', { timeoutMs: 120000 }, async ($, on) => {
   const w = world(on, { ...seeds, 'a.txt': tenLines })
   await start($)
   await fillList($, w)
   const got: string[] = []
-  for (const n of [24, 23, 22, 21]) got.push(`#${n}: ${(await undoOr($, String(n))).split('\n')[0]!.slice(0, 90)} | list ${w.stateSets.at(-1)} chars`)
+  for (const n of [22, 21, 20, 19]) got.push(`#${n}: ${(await undoOr($, String(n))).split('\n')[0]!.slice(0, 90)} | list ${w.stateSets.at(-1)} chars`)
   console.log(`U1c undos:\n${got.join('\n')}`)
   for (const g of got) expect(g).toContain('undid')
 })

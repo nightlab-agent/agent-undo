@@ -42,3 +42,10 @@ without running a session. A later engine may differ; the audit that led to this
 - `tests/world.tsx` and `review2-world.tsx` answer only the git commands the record runs. Real git
   runs in `tests/git-snapshot.sh` and `tests/git-wipe.sh`. The hand-written one-line patches in the
   older `review-*` worlds carry no tabs and do not go through `tests/engine.tsx`.
+
+## A fake's result must describe its file
+
+The mod works out the new file from a result's `originalFile`, `oldString` and `newString`, and proves each diff line
+against them. A world that answers with a marker string and made-up diff lines leaves an edit with no hunks, and a test
+that only counts entries still passes while testing nothing: the size-cap tests sat at 1 KB of list for that reason. A
+test about size asserts the size it reached.

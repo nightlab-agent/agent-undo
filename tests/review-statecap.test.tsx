@@ -43,16 +43,17 @@ const world = (on: On, files0: Record<string, string>) => {
   on('tool.call', (_, e) => {
     const x = e as unknown as { file_path: string; old_string: string; new_string: string }
     const was = files.get(x.file_path)!
-    files.set(x.file_path, was.replace(x.old_string, x.new_string))
-    // `wide:<n>`: the engine's diff of an edit that rewrote n lines of 1100 characters (under MAX_LINES, so
-    // kept hunk by hunk); else one changed line, as review8's world answers.
+    // `wide:<n>`: an edit that rewrote n lines of 1100 characters (under MAX_LINES, so kept hunk by hunk): the file held
+    // the old block where `old_string` stands, and the result's strings and diff agree with it, as the engine's do.
     const m = /^wide:(\d+)$/.exec(x.new_string)
-    const lines = m
-      ? [...Array.from({ length: Number(m[1]) / 2 }, (_, k) => `-${String(k).padStart(4, '0')}${'x'.repeat(1096)}`),
-        ...Array.from({ length: Number(m[1]) / 2 }, (_, k) => `+${String(k).padStart(4, '0')}${'y'.repeat(1096)}`)]
-      : [`-${x.old_string}`, `+${x.new_string}`]
-    return { result: { filePath: x.file_path, oldString: x.old_string, newString: x.new_string, originalFile: was,
-      structuredPatch: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines }],
+    const block = (c: string) => Array.from({ length: Number(m![1]) / 2 }, (_, k) => `${String(k).padStart(4, '0')}${c.repeat(1096)}`)
+    const [before, after] = m ? [block('x'), block('y')] : [[x.old_string], [x.new_string]]
+    const line = was.split('\n').indexOf(x.old_string) + 1
+    const [oldString, newString] = [before.join('\n'), after.join('\n')]
+    files.set(x.file_path, was.replace(x.old_string, newString))
+    return { result: { filePath: x.file_path, oldString, newString, originalFile: was.replace(x.old_string, oldString),
+      structuredPatch: [{ oldStart: line, oldLines: before.length, newStart: line, newLines: after.length,
+        lines: [...before.map(l => `-${l}`), ...after.map(l => `+${l}`)] }],
       userModified: false, replaceAll: false } } as never
   })
   return w
@@ -83,6 +84,7 @@ test('review-gate C1 comparison: nine such edits (3.97 MB), the ninth is listed 
   const w = world(on, { 'a.txt': tenLines })
   await start($)
   await wide($, w, 9)
+  expect(w.stateSets.at(-1)!).toBeGreaterThan(3_900_000)
   expect(await undo($, '')).toContain('#9 ')
   expect(w.statuses.at(-1)).toContain('#9 ')
 })

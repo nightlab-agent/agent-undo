@@ -113,8 +113,8 @@ came back as committed, and `notes.txt` stayed.
 
 - Needs git 2.31 or newer. An older git cannot name the private index this
   record uses, so shell commands are not recorded and the list says so; your
-  real index is never used instead (tested with a fake git that answers as the
-  audit reports 2.30 does; no older git was run).
+  real index is never used instead (tested with a fake git that answers as git
+  2.30 is reported to; no older git was run).
 - A file under a git clean filter (nbstripout, say) is left as it is: a filter can
   hide a later change. So is a file whose bytes differ from what git stored,
   which is any file git converts on your machine (`core.autocrlf` on Windows,
@@ -183,7 +183,8 @@ came back as committed, and `notes.txt` stayed.
   the files it left, and running it again finishes them. One that fails in a way no step expected says
   "this undo stopped": read the file before you try again.
 - An Edit that waits past Claude Code's 10 s hook budget behind permission
-  questions on the same file lands, but is not listed, so it cannot be undone here.
+  questions on the same file lands, but is not listed, so it cannot be undone here
+  (read from the code, not tested).
 - A file you save in your editor while a command runs looks like the
   command's. The check above still refuses an undo once you change it again.
 - Every command that runs without a question waits for two git snapshots,

@@ -54,8 +54,8 @@
 - An undo still waiting near the end of its hook budget gives up and says so, instead of writing after its answer.
 - Every undo ends in its outcome line. A read-only file, a file deleted during the undo and a failure no step expected
   used to leave as a hook failure, and the person read Claude Code's message for plugin authors.
-- A file too large to read answers with a line instead of an error. A store eviction spares a session saved since the
-  scan. A failed release no longer depends on `tests/release.sh` missing the real-file tests: they run there now.
+- A file too large to read answers with a line instead of an error. When the store is full and an old conversation's copy is dropped, one saved since the
+  scan is kept. A failed release no longer depends on `tests/release.sh` missing the real-file tests: they run there now.
 - The npm package carries `hooks/hunks.tsx`. A release from before this line would not have loaded: `hooks/register.tsx` imports that file
   and the package's file list left it out. 0.2.2 is not affected. The release check now fails when a packed hook imports an unpacked file.
 - An Edit through a linked folder during a command stays with the Edit. Before, git's real path and the Edit's path

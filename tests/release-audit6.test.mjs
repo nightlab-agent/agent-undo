@@ -135,7 +135,7 @@ async function world(t, initial = {}, options = {}) {
     const run = i => {
       if (i === matches.length) return leaf(e)
       const next = Object.assign(input => dispatchFrom(i + 1, input), {
-        budget: { remainingMs: w.budgetMs ?? 10000 }, signal: w.signal ?? new AbortController().signal,
+        budget: { started: Date.now(), get remainingMs() { return (w.budgetMs ?? 10000) - (Date.now() - this.started) } }, signal: w.signal ?? new AbortController().signal,
       })
       return matches[i].handler($, e, next)
     }
@@ -274,13 +274,13 @@ for (const stop of ['none', 'interrupt', 'budget']) test(`many-file retry comple
   const ctrl = new AbortController(); w.signal = ctrl.signal
   const expired = gate(), clockSleep = w.engine.clock.sleep
   // Fire this bound at a known point; a 20 ms timer can expire before the first restore on a busy disk.
-  if (stop === 'budget') w.engine.clock.sleep = (ms, options) => ms === 8500 ? expired.p : clockSleep(ms, options)
+  if (stop === 'budget') w.engine.clock.sleep = (ms, options) => ms > 1000 ? expired.p : clockSleep(ms, options)
   const run = w.engine.process.run
   w.engine.process.run = async (a, i) => {
     const out = await run(a, i)
     if (a[1] === 'restore' && a.at(-1) === ':(literal)a.txt') {
       if (stop === 'interrupt') ctrl.abort()
-      if (stop === 'budget') expired.open()
+      if (stop === 'budget') { w.budgetMs = 0; expired.open() }
     }
     return out
   }
@@ -288,7 +288,7 @@ for (const stop of ['none', 'interrupt', 'budget']) test(`many-file retry comple
   assert.equal(await w.read('a.txt'), 'one\n')
   assert.equal(await w.read('b.txt'), stop === 'none' ? 'two\n' : 'TWO\n')
   if (stop !== 'none') assert.match(first, /1\.2 left as is: this undo (was interrupted|ran out of time)/)
-  w.signal = undefined; w.engine.clock.sleep = clockSleep
+  w.signal = undefined; w.budgetMs = undefined; w.engine.clock.sleep = clockSleep
   const second = await w.undo('1')
   assert.match(second, stop === 'none' ? /nothing changed/ : /undid 1\.2/)
   assert.equal(await w.read('b.txt'), 'two\n')

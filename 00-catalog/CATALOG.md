@@ -41,6 +41,7 @@
 | `tests/release-audit4.test.mjs` | The same: the turn and the queue under a passed bound, a restore cut short. |
 | `tests/release-audit5.test.mjs` | The same: one undo giving up behind another, the last read, a list changing hands. |
 | `tests/release-audit6.test.mjs` | A second reader's probes: abandoned undos, a retried list update, a many-file undo run again. |
+| `tests/release-audit7.test.mjs` | Slow healthy tools: the hook's budget stands still during a `$` call, so an undo is not refused for them. |
 | `tests/review-tsr-after-turn.test.tsx` | A shell undo past its time spends no git call per file. |
 | `tests/native-ask.sh` | The real engine's words on an ask, which hooks/register.tsx reads. |
 | `tests/temp-tools.tsx` | Fake `mktemp`, `cp`, `mv` and `rm` for the plugin test worlds. |

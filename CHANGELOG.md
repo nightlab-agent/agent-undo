@@ -9,6 +9,8 @@
   alone, read inside the list's own update. A conversation that ends during the permission check spends the allow too, and a snapshot's git call that
   never comes back no longer holds the queue for good (`tests/release-audit2.test.mjs`,
   `tests/release-audit3.test.mjs`, real files and real git).
+- An undo on a slow drive is no longer refused as out of time: its limit now counts the hook's own time, as Claude Code's
+  does, not the time its tools take (`tests/release-audit7.test.mjs`).
 - A shell undo whose time ran out stops at once, with no git call for each file it will not touch
   (`tests/review-tsr-after-turn.test.tsx`).
 - An Edit or Write run on an attached machine is not recorded: this machine cannot restore it. Read from Claude Code's

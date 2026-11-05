@@ -58,7 +58,7 @@ test about size asserts the size it reached.
 
 `tests/world.tsx` is maps of strings: its `fs.exists` and `hash-object` walk no link, its restore never fails part way
 except where a test wraps it, it knows no permissions or text conversion, it ignores `timeoutMs`, its writes are
-atomic. The worst faults of the audit lived in that gap. So `tests/release-audit.test.mjs`, `release-audit2` to `6`
+atomic. The worst faults of the audit lived in that gap. So `tests/release-audit.test.mjs`, `release-audit2` to `7`
 run the compiled hooks on real files, links, modes and git, and are part of `tests/release.sh`. A fault about bytes,
 links, modes or a kill gets its test there, not in the world. No test here runs a model turn; `tests/native-ask.sh` starts the real engine for its permission verdict.
 The plugin test kit refuses `clock.sleep` and the audit worlds answer it, so a timer path runs both ways only if a test exists in each.

@@ -128,7 +128,7 @@ async function world(t, initial = {}, options = {}) {
     const run = i => {
       if (i === matches.length) return leaf(e)
       const next = Object.assign(input => dispatchFrom(i + 1, input), {
-        budget: { remainingMs: w.budgetMs ?? 10000 }, signal: w.signal ?? new AbortController().signal,
+        budget: { started: Date.now(), get remainingMs() { return (w.budgetMs ?? 10000) - (Date.now() - this.started) } }, signal: w.signal ?? new AbortController().signal,
       })
       return matches[i].handler($, e, next)
     }

@@ -18,29 +18,53 @@ async function inTheWay($: EngineInterface, top: string, path: string) {
   return undefined
 }
 
-/** The executable bit as the file has it now, where git tracks it; undefined where this cannot say. */
-async function executable($: EngineInterface, top: string, path: string) {
+/** The file's permission bits, by GNU's `stat` and then BSD's (`$.fs.stat` has no mode); undefined where neither answers. */
+async function bitsOf($: EngineInterface, top: string, path: string) {
+  for (const format of [['-c', '%a'], ['-f', '%Lp']]) {
+    const r = await $.process.run(['stat', ...format, '--', path], { cwd: top }).catch(() => undefined)
+    const text = r?.exitCode === 0 ? r.stdout.trim() : ''
+    if (/^[0-7]{3,4}$/.test(text)) return parseInt(text, 8)
+  }
+  return undefined
+}
+
+/** The file's permissions before a restore: its bits, and its executable bit where git tracks one (`x`). */
+type Perms = { bits: number | undefined; x: boolean | undefined }
+
+/** Read before the last hash, so that nothing but the restore stands between that hash and the write. */
+async function permissions($: EngineInterface, top: string, path: string): Promise<Perms> {
+  const bits = await bitsOf($, top, path)
   try {
     const off = await $.process.run(['git', 'config', '--type=bool', 'core.filemode'], { cwd: top })
-    if (off.stdout.trim() === 'false') return undefined
-    return (await $.process.run(['test', '-x', path], { cwd: top })).exitCode === 0
+    if (off.stdout.trim() === 'false') return { bits, x: undefined }
+    // git's own test of the bit: the owner's.
+    return { bits, x: bits !== undefined ? (bits & 0o100) !== 0 : (await $.process.run(['test', '-x', path], { cwd: top })).exitCode === 0 }
   } catch {
-    return undefined
+    return { bits, x: undefined }
   }
 }
 
-/** Whether the file holds an executable bit git is told to ignore: `git restore` takes that bit away all the same. */
-async function looseExecutable($: EngineInterface, top: string, path: string) {
-  try {
-    const off = await $.process.run(['git', 'config', '--type=bool', 'core.filemode'], { cwd: top })
-    return off.stdout.trim() === 'false' && (await $.process.run(['test', '-x', path], { cwd: top })).exitCode === 0
-  } catch {
-    return false
-  }
+/** The bits a restored file should have: the old ones, with the executable state git restored where the command changed it. */
+const bitsBack = (old: number, restored: number | undefined, tracked: boolean) => {
+  if (!tracked || restored === undefined) return old
+  const x = (restored & 0o100) !== 0
+  if (x === ((old & 0o100) !== 0)) return old
+  return x ? old | ((old & 0o444) >> 2) : old & ~0o111
+}
+
+/** `git restore` recreated the file at the umask mode: puts its permissions back. The answer is what went wrong, if anything. */
+async function keepBits($: EngineInterface, top: string, path: string, had: Perms, name: string) {
+  if (had.bits === undefined) return undefined
+  const now = await bitsOf($, top, path)
+  const want = bitsBack(had.bits, now, had.x !== undefined)
+  if (want === now) return undefined
+  const why = await $.process.run(['chmod', want.toString(8), `./${path}`], { cwd: top })
+    .then(r => (r.exitCode === 0 ? undefined : r.stderr.trim() || 'chmod failed'), (err: unknown) => String((err as Error)?.message ?? err))
+  return why === undefined ? undefined : `${name} is back, but its permissions (${want.toString(8)}) are not: ${why.split('\n')[0]}`
 }
 
 /** Why the file at `f` cannot be put back as it stands, or nothing. Runs right before the restore, after any wait for the index. */
-async function refusal($: EngineInterface, c: Change, f: ShellFile, name: string, shown: (f: string) => string) {
+async function refusal($: EngineInterface, c: Change, f: ShellFile, name: string, shown: (f: string) => string, had: Perms) {
   const top = c.top!
   const path = `${top}/${f.path}`
   const there = await $.fs.exists(path)
@@ -61,8 +85,7 @@ async function refusal($: EngineInterface, c: Change, f: ShellFile, name: string
     const same = (await git($, ['hash-object', '--', f.path], top)).trim() === f.after
     return same ? `git rewrites ${name} (its line endings or keywords), which can hide a later change` : changed
   }
-  const x = await executable($, top, f.path)
-  if (x !== undefined && x !== (f.exec === true)) return `the permissions of ${name} have changed since the ${c.tool === 'MCP' ? 'call' : 'command'}`
+  if (had.x !== undefined && had.x !== (f.exec === true)) return `the permissions of ${name} have changed since the ${c.tool === 'MCP' ? 'call' : 'command'}`
   return undefined
 }
 
@@ -101,14 +124,16 @@ export async function undoShell($: EngineInterface, c: Change, h: number | undef
       if (!repo) throw new Error('the repo is no longer there')
       // The checks stand behind the wait for the index: a save made during that wait is seen.
       const no = await onIndex(async () => {
-        const why = await refusal($, c, f, name, shown)
+        // A deleted file has no permissions to keep.
+        const had = f.status === 'D' ? { bits: undefined, x: undefined } : await permissions($, c.top!, f.path)
+        const why = await refusal($, c, f, name, shown, had)
         if (why !== undefined) return why
         // An open window (a Bash command or MCP call running now) must not take this undo as its change.
         touched(spelled(c, f.path))
-        const loose = await looseExecutable($, c.top!, f.path)
         restoring = true
         await git($, ['restore', `--source=${c.tree}`, '--worktree', '--', `:(literal)${f.path}`], c.top!, repo.env)
-        if (loose && (await $.process.run(['chmod', '+x', `./${f.path}`], { cwd: c.top! })).exitCode !== 0) notes.push(`${ref}: ${name} lost its executable bit`)
+        const lost = await keepBits($, c.top!, f.path, had, name)
+        if (lost !== undefined) notes.push(`${ref}: ${lost}`)
         return undefined
       })
       if (no !== undefined) { notes.push(`${ref} left as is: ${no}`); continue }

@@ -594,4 +594,108 @@ for (const refreshOnRead of [1, 2]) {
   })
 }
 
+
+// ---- A shell undo keeps the file's permissions (git recreates the file at the umask mode).
+const mode = async (w, n) => (await fs.stat(join(w.root, n))).mode & 0o7777
+const wrapRun = (w, f) => { const run = w.engine.process.run; w.engine.process.run = (argv, init) => f(argv, init, run) }
+const octal = n => n.toString(8)
+for (const start of [0o600, 0o640, 0o644, 0o664, 0o1750]) {
+  test(`permissions: a ${octal(start)} file keeps them through a shell undo`, async t => {
+    const w = await world(t, { 'secret.env': 'token=old\n' })
+    await fs.chmod(join(w.root, 'secret.env'), start)
+    await w.bash('echo token=new >> secret.env')
+    assert.equal(await mode(w, 'secret.env'), start)
+    assert.match(await w.undo('1'), /undid/)
+    assert.equal(await w.read('secret.env'), 'token=old\n')
+    assert.equal(octal(await mode(w, 'secret.env')), octal(start))
+  })
+}
+test('permissions: bits narrowed after the command stay narrow', async t => {
+  const w = await world(t, { 'secret.env': 'token=old\n' })
+  await w.bash('echo token=new >> secret.env')
+  await fs.chmod(join(w.root, 'secret.env'), 0o600)
+  assert.match(await w.undo('1'), /undid/)
+  assert.equal(octal(await mode(w, 'secret.env')), '600')
+})
+test('permissions comparison: an executable bit set after the command is refused', async t => {
+  const w = await world(t, { 'run.sh': 'old\n' })
+  await w.bash('echo new >> run.sh')
+  await fs.chmod(join(w.root, 'run.sh'), 0o755)
+  assert.match(await w.undo('1'), /permissions.*changed/)
+  assert.equal(octal(await mode(w, 'run.sh')), '755')
+})
+test('permissions: an owner-only script stays owner-only', async t => {
+  const w = await world(t, { 'run.sh': 'old\n' })
+  await fs.chmod(join(w.root, 'run.sh'), 0o700)
+  w.git('add', '-A'); w.git('commit', '-qm', 'x')
+  await w.bash('echo new >> run.sh')
+  assert.match(await w.undo('1'), /undid/)
+  assert.equal(octal(await mode(w, 'run.sh')), '700')
+})
+test('permissions: a command that added the bit loses it, everywhere, and the rest stays', async t => {
+  const w = await world(t, { 'run.sh': 'old\n' })
+  await fs.chmod(join(w.root, 'run.sh'), 0o600)
+  await w.bash('echo new >> run.sh; chmod 711 run.sh')
+  assert.match(await w.undo('1'), /undid/)
+  assert.equal(octal(await mode(w, 'run.sh')), '600')
+})
+test('permissions: a command that took the bit away gives it back only where r is', async t => {
+  const w = await world(t, { 'run.sh': 'old\n' })
+  await fs.chmod(join(w.root, 'run.sh'), 0o755)
+  w.git('add', '-A'); w.git('commit', '-qm', 'x')
+  await w.bash('echo new >> run.sh; chmod 640 run.sh')
+  assert.match(await w.undo('1'), /undid/)
+  assert.equal(octal(await mode(w, 'run.sh')), '750')
+})
+test('permissions: with core.filemode false the old bits win whole', async t => {
+  const w = await world(t, { 'run.sh': 'old\n' })
+  w.git('config', 'core.filemode', 'false')
+  await fs.chmod(join(w.root, 'run.sh'), 0o750)
+  await w.bash('echo new >> run.sh')
+  assert.match(await w.undo('1'), /undid/)
+  assert.equal(octal(await mode(w, 'run.sh')), '750')
+})
+test('permissions: BSD stat answers where GNU stat does not (macOS)', async t => {
+  const w = await world(t, { 'secret.env': 'old\n' })
+  await fs.chmod(join(w.root, 'secret.env'), 0o600)
+  await w.bash('echo new >> secret.env')
+  wrapRun(w, (argv, init, run) => argv[0] !== 'stat' ? run(argv, init)
+    : argv[1] === '-c' ? Promise.resolve({ exitCode: 1, stdout: '', stderr: "stat: illegal option -- c" })
+    : run(['stat', '-c', '%a', ...argv.slice(3)], init))
+  assert.match(await w.undo('1'), /undid/)
+  assert.equal(octal(await mode(w, 'secret.env')), '600')
+})
+for (const way of ['exits non-zero', 'cannot start']) {
+  test(`permissions: no stat answers (${way}): as before, the file is back at git's mode with no chmod`, async t => {
+    const w = await world(t, { 'a.sh': 'old\n' })
+    await w.bash('echo new >> a.sh')
+    wrapRun(w, (argv, init, run) => argv[0] !== 'stat' ? run(argv, init)
+      : way === 'exits non-zero' ? Promise.resolve({ exitCode: 1, stdout: '', stderr: 'no' }) : Promise.reject(new Error('spawn stat ENOENT')))
+    assert.match(await w.undo('1'), /undid/)
+    assert.equal(w.commands.filter(c => c.argv[0] === 'chmod').length, 0)
+    assert.equal(await w.read('a.sh'), 'old\n')
+  })
+}
+test('permissions: an ordinary file runs no chmod', async t => {
+  const w = await world(t, { 'a.txt': 'old\n' })
+  await fs.chmod(join(w.root, 'a.txt'), 0o644)
+  await w.bash('echo new >> a.txt')
+  await w.undo('1')
+  assert.equal(w.commands.filter(c => c.argv[0] === 'chmod').length, 0)
+})
+for (const way of ['exits non-zero', 'cannot start']) {
+  test(`permissions: a chmod that ${way} gets a note naming the file, and the undo stands`, async t => {
+    const w = await world(t, { 'secret.env': 'old\n' })
+    await fs.chmod(join(w.root, 'secret.env'), 0o600)
+    await w.bash('echo new >> secret.env')
+    wrapRun(w, (argv, init, run) => argv[0] !== 'chmod' ? run(argv, init)
+      : way === 'exits non-zero' ? Promise.resolve({ exitCode: 1, stdout: '', stderr: 'chmod: not permitted' }) : Promise.reject(new Error('spawn chmod EAGAIN')))
+    const out = await w.undo('1')
+    assert.match(out, /undid 1\.1/)
+    assert.match(out, /1\.1: secret\.env .*600/)
+    assert.doesNotMatch(out, /part way|left as is/)
+    assert.equal(await w.read('secret.env'), 'old\n')
+  })
+}
+
 }

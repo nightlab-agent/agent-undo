@@ -21,8 +21,10 @@
   there since a command. Before, it changed the other file, or swapped the link for a plain file
   (`tests/release-audit.test.mjs`, real links).
 - A shell undo compares the bytes on disk. Before, git's own hash hid a later change of line endings or an `$Id$`
-  keyword, and the undo wiped it and said it worked. Files git converts are now left as they are. Permissions changed
-  since the command are also refused; before, the undo dropped them.
+  keyword, and the undo wiped it and said it worked. Files git converts are now left as they are. An executable bit
+  changed since the command is also refused; before, the undo dropped it.
+- A shell undo keeps the file's permissions. Before, `git restore` recreated the file at the umask mode: 600 became 644,
+  700 became 755. Where the command itself changed the executable bit, that bit goes back and the rest stays.
 - A save made while a shell undo waits behind a snapshot stays. The checks now run after the wait.
 - A shell undo that git leaves unfinished says so, with the command that brings the file back. Before, it said "left
   as is" after git had already removed the file.

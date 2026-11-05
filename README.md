@@ -125,6 +125,11 @@ came back as committed, and `notes.txt` stayed.
 - A save in the instant between the last check and the write is lost, as with any two writers: a shell
   undo's window is one process start, an Edit undo's one file read. A save made
   earlier, during any wait, is seen and refused (`tests/release-audit.test.mjs`).
+- A shell undo keeps a file's permissions as they stand when you undo, read with `stat`. Only the executable bit follows
+  the command, and only where git tracks it: other permissions a command changed are not recorded and stay changed.
+  `git restore` recreates the file at your umask's mode and the undo then sets the permissions back, so for that
+  moment a private file is readable as your umask allows, and an undo killed in that moment leaves it so. A chmod
+  that fails is named in the outcome. A deleted file comes back at git's mode, and so does any file where `stat` does not answer.
 - A changed or deleted file comes back as it was just before the command,
   your uncommitted changes included. It is put back only if it still reads
   exactly as the command left it (or, if the command deleted it, nothing is

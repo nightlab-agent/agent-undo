@@ -4,7 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Change, Hunk } from '../types'
 import { acrossUndo, followed, hunksFrom, onceIn, undoAt } from './hunks'
 import type { Move, Patch } from './hunks'
-import { editing, ended, fileKey, forgetRestore, inTurn, newTurn, record, restoreList, serial, showNewest, slashed, snapped, time, touched, updateList } from './common'
+import { editing, ended, fileKey, forgetRestore, inTurn, newTurn, record, restoreList, serial, showNewest, slashed, snapped, time, updateList } from './common'
 import type { Turn, Why } from './shared'
 import { INDEX_TAG, ownTool, registerShell, sessionEnds, shellNote, spelled } from './shell'
 import { undoShell } from './shell-undo'
@@ -61,6 +61,8 @@ async function reached($: EngineInterface, file: string) {
   return real !== undefined && fileKey(real) !== fileKey(file) ? { real } : {}
 }
 
+const stoppedBy: Record<Why, string> = { budget: 'this undo ran out of time', interrupted: 'this undo was interrupted', ended: 'the conversation this undo belonged to has ended' }
+
 const firstLine = (err: unknown) => String((err as Error)?.message ?? err).split('\n')[0] ?? ''
 
 /**
@@ -69,7 +71,7 @@ const firstLine = (err: unknown) => String((err as Error)?.message ?? err).split
  * the file stayed as it was, or undefined once it is done. There is no second way: `$.process.run` rejects alike for a
  * machine without these tools, a command that could not start and one out of time, and a plain write killed halfway empties the file.
  */
-async function putBack($: EngineInterface, file: string, real: string, was: string, text: string) {
+async function putBack($: EngineInterface, file: string, real: string, was: string, text: string, turn: Turn) {
   const folder = real.slice(0, real.lastIndexOf('/') + 1)
   const run = (...argv: string[]) => $.process.run(argv, { cwd: folder || '.' })
     .catch((err: unknown) => ({ exitCode: 1, stdout: '', stderr: firstLine(err) }))
@@ -81,8 +83,8 @@ async function putBack($: EngineInterface, file: string, real: string, was: stri
   const made = await run('mktemp', `${folder}.agent-undo-${INDEX_TAG}-XXXXXXXX`)
   const tmp = made.stdout.trim()
   if (made.exitCode !== 0 || !tmp) return `could not get a temporary copy beside it (${said(made)})`
-  touched(tmp)
-  try {
+  // editing(), not touched(): a window that opens while the copy exists must not take it as a new file.
+  return editing(tmp, async () => { try {
     const copy = await run('cp', '-p', real, tmp)
     if (copy.exitCode !== 0) return `could not be copied (${said(copy)})`
     // cp -p makes the copy read-only with a read-only file, and the write fails there, as it should.
@@ -91,12 +93,13 @@ async function putBack($: EngineInterface, file: string, real: string, was: stri
     } catch (err) {
       return `could not be written (${firstLine(err)})`
     }
+    if (turn.why) return `stayed as it was: ${stoppedBy[turn.why]}`
     if (await moved()) return changed
     const mv = await run('mv', '-f', tmp, real)
     return mv.exitCode !== 0 ? `could not be put in place (${said(mv)})` : undefined
   } finally {
     await run('rm', '-f', tmp)
-  }
+  } })
 }
 
 /** The change number and hunk number of `3` or `3.2`. */
@@ -207,12 +210,13 @@ async function run($: EngineInterface, args: string, turn = newTurn()): Promise<
     // An open window (a Bash command or MCP call running now) must not take this undo as its change.
     // editing() also covers a window that opens while the write is in flight.
     // user file: an undo puts the user's own file back as it was.
-    const stayed = await editing(c.file, () => putBack($, c.file, lands?.realPath ?? c.file, was, text))
+    const stayed = await editing(c.file, () => putBack($, c.file, lands?.realPath ?? c.file, was, text, turn))
     if (stayed !== undefined) return `agent-undo: ${shown(c.file)} ${stayed}; nothing changed.`
     const once = onceIn(text)
     const gone = new Set(undone)
     const hunks = c.hunks.map((o, k) => { const h = acrossUndo(o, moves, once); return gone.has(k) ? { ...h, undone: true } : h })
-    await updateList($, all => all.map(x => x.n === c.n ? { ...x, hunks }
+    // The list is the next conversation's by now, and its numbers are not this one's.
+    if (!turn.gone) await updateList($, all => all.map(x => x.n === c.n ? { ...x, hunks }
       : fileKey(x.file) === fileKey(c.file) ? { ...x, hunks: x.hunks.map(h => acrossUndo(h, moves, once)) } : x))
   }
   const did = undone.length > 0
@@ -262,7 +266,7 @@ const undoing = async ($: EngineInterface, args: string, budgetMs = 10000, signa
   // "1" another conversation's. So an undo still waiting at any of those gives up, and cannot write after its answer.
   const turn = newTurn()
   const interrupted = () => turn.say('interrupted')
-  const conversationEnded = () => turn.say('ended')
+  const conversationEnded = () => { turn.gone = true; turn.say('ended') }
   const stop = new AbortController()
   if (signal?.aborted) interrupted()
   signal?.addEventListener('abort', interrupted, { once: true })
@@ -270,7 +274,7 @@ const undoing = async ($: EngineInterface, args: string, budgetMs = 10000, signa
   void $.clock.sleep(Math.max(0, budgetMs - 1500), { signal: stop.signal }).then(() => turn.say('budget'), () => {})
   const id = sessionId($)
   try {
-    return await inTurn(turn, job => serial(undefined, job), async () => (await id === await sessionId($) ? outcome($, args, turn) : notUndone.ended), why => notUndone[why])
+    return await inTurn(turn, (job, left) => serial(undefined, job, left), async () => (await id === await sessionId($) ? outcome($, args, turn) : notUndone.ended), why => notUndone[why])
   } finally {
     stop.abort()
     ended.delete(conversationEnded)

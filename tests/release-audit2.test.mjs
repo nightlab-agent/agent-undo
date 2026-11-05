@@ -7,12 +7,13 @@ import assert from 'node:assert/strict'
 import { execFileSync, fork } from 'node:child_process'
 import { createRequire } from 'node:module'
 import * as fs from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as sleep } from 'node:timers/promises'
 
 const source = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const scratch = await fs.mkdtemp('/tmp/agent-undo-release-audit-')
+const scratch = await fs.mkdtemp(join(tmpdir(), 'agent-undo-release-audit-'))
 after(() => fs.rm(scratch, { recursive: true, force: true }))
 const compiled = join(scratch, 'compiled')
 const types = process.env.CC_TYPES ?? join(source, '.claude-plugin/types/claude-code/index.d.ts')
@@ -944,7 +945,7 @@ test('a shell undo behind a stuck snapshot answers inside its budget and writes 
   const began = Date.now()
   const out = await w.undo('1')
   assert.ok(Date.now() - began < 1500, 'answered inside the budget')
-  assert.match(out, /1\.1 left as is: .*snapshot.*still running/)
+  assert.match(out, /1\.1 left as is: this undo ran out of time/)
   assert.match(out, /nothing changed/)
   stuck.open(); await stuck.bash; await tick()
   assert.equal(await w.read('a.txt'), 'ONE\n')
@@ -1000,7 +1001,7 @@ test('comparison: a turn inside its bound still holds the next one back', async 
   const stuck = await stuckSnapshot(w)
   w.budgetMs = 1700
   const out = await w.undo('1')
-  assert.match(out, /still running/)
+  assert.match(out, /ran out of time/)
   stuck.open(); await stuck.bash
 })
 

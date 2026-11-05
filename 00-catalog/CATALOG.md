@@ -34,5 +34,13 @@
 | `tests/old-git.test.tsx` | Shell recording stops where git cannot name the private index. |
 | `tests/world.tsx` | The test world for the Bash record: an in-memory repo, a strict fake git, the permission question. |
 | `tests/git-snapshot.sh` | The Bash record's git commands on a real scratch repo. |
+| `tests/git-wipe.sh` | Real git commands that throw away uncommitted work, then undone. |
+| `tests/release-audit.test.mjs` | The compiled hooks on real files, links, modes and git: kills, links, private files. |
+| `tests/release-audit2.test.mjs` | The same on real files: permissions, temporary copies, an undo waiting its turn. |
+| `tests/release-audit3.test.mjs` | The same: a conversation or interrupt during an undo, the queue after one gives up. |
+| `tests/release-audit4.test.mjs` | The same: the turn and the queue under a passed bound, a restore cut short. |
+| `tests/native-ask.sh` | The real engine's words on an ask, which hooks/register.tsx reads. |
+| `tests/temp-tools.tsx` | Fake `mktemp`, `cp`, `mv` and `rm` for the plugin test worlds. |
+| `preview/ask-plugin/` | A second plugin for previews, so a real no can be shown on screen. |
 | `docs/preview-bash.png` | The shell undo seen on a screen. |
 | `preview/project/` | The sample project the screen preview opens. |

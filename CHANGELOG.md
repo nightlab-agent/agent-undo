@@ -4,25 +4,31 @@
 - An undo waiting its turn no longer outlives its call. Behind an Edit at its question or a running snapshot, an
   interrupt, the end of the conversation or the end of the hook's time now stops it there: it says so at once and
   writes nothing later. Before, a queued undo could land on the next conversation's edit of the same number after a
-  `/resume`. A conversation that ends during the permission check spends the allow too, and a git call that never
-  comes back no longer holds the queue for good (`tests/release-audit2.test.mjs`, real files and real git).
-- The copy an undo writes has its own name, made fresh, so it can no longer overwrite a file already there or fail on
-  a long file name. If no copy can be made (a folder you cannot write in, `mktemp`, `cp` or `mv` that cannot run), the
-  undo says so and changes nothing; before, it fell back to the write that empties the file first
-  (`tests/release-audit2.test.mjs`, real files).
+  `/resume`. An undo that gives up leaves the queue at once, so Edits of other files go on. One that has begun looks
+  at its turn again before its write, and a conversation that ends during it leaves the next conversation's list
+  alone. A conversation that ends during the permission check spends the allow too, and a snapshot's git call that
+  never comes back no longer holds the queue for good (`tests/release-audit2.test.mjs`,
+  `tests/release-audit3.test.mjs`, real files and real git).
+- A command that starts during a shell undo waits for the restore, so it cannot list the undo as its own change
+  and a later undo of that command cannot reverse it. A command that starts during an Edit undo no longer lists the
+  temporary copy (`tests/release-audit3.test.mjs`, `tests/release-audit4.test.mjs`).
+- A deleted file whose restore was cut short now reads "failed part way" with the command that brings it back. Before,
+  it said "nothing changed" with part of the file on disk (`tests/release-audit4.test.mjs`).
+- If no copy can be made for an undo (a folder you cannot write in, `mktemp`, `cp` or `mv` that cannot run), the undo
+  says so and changes nothing (`tests/release-audit2.test.mjs`, real files).
 - An undo no longer lands on another file if a link replaces the file while the undo reads it
   (`tests/release-audit2.test.mjs`).
 - Where git ignores permissions (`core.filemode` false), a shell undo keeps an executable bit you set; `git restore`
   takes it away and said nothing (`tests/release-audit2.test.mjs`).
-- In plan mode Claude's undo stays refused: a yes no longer overrides the mode (`tests/review-dex-plan.test.tsx`). A
-  question left open when the conversation ends or clears is spent, so a late yes cannot land on the next conversation's
-  edit of the same number (`tests/review-dex-ask.test.tsx`).
-- Claude's undo tool now asks Claude Code first. Before, it answered with no permission step, so plan mode and deny
-  rules did not stop it. An allow goes through; where Claude Code would ask, you get the question; a no, a closed
-  question, a deny or a run with no one to answer changes nothing, and `/agent-undo` stays yours
-  (`tests/review-crz.test.tsx`, `tests/review-ask.test.tsx`). Listing needs no check.
-- An undo killed halfway no longer empties the file: an Edit or Write undo writes a copy beside it and renames
-  (`tests/release-audit.test.mjs`, a real killed write).
+- Claude's undo tool now checks Claude Code's permission rules and mode first (not hooks or the auto-mode classifier).
+  Before, it answered with no permission step, so plan mode and deny rules did not stop it. An allow goes through;
+  where the rules ask, you get the question; a no, a closed question, a deny, an ask of a kind it does not know or a
+  run with no one to answer changes nothing, and `/agent-undo` stays yours (`tests/review-crz.test.tsx`,
+  `tests/review-ask.test.tsx`). Plan mode stays a refusal: a yes does not override it (`tests/review-dex-plan.test.tsx`).
+  A question left open when the conversation ends or clears is spent, so a late yes cannot land on the next
+  conversation's edit of the same number (`tests/review-dex-ask.test.tsx`). Listing needs no check.
+- An undo killed halfway no longer empties the file: an Edit or Write undo writes a fresh copy beside it under a name
+  of its own and renames, so it cannot overwrite a file already there (`tests/release-audit.test.mjs`, a real killed write).
 - An undo no longer follows a link put at the edited path into another file, or replaces a link or linked folder put
   there since a command. Before, it changed the other file, or swapped the link for a plain file
   (`tests/release-audit.test.mjs`, real links).
@@ -39,8 +45,8 @@
 - A repo git refuses (dubious ownership) now shows git's line. Before, nothing was recorded and nothing was said.
 - A first snapshot may take 60 s, not 20. A killed one recorded nothing on a large repo.
 - An undo still waiting near the end of its hook budget gives up and says so, instead of writing after its answer.
-- Every undo ends in its outcome line. A `mv` that fails, a read-only file, a file deleted during the undo and a failure
-  no step expected used to leave as a hook failure, and the person read Claude Code's message for plugin authors.
+- Every undo ends in its outcome line. A read-only file, a file deleted during the undo and a failure no step expected
+  used to leave as a hook failure, and the person read Claude Code's message for plugin authors.
 - A file too large to read answers with a line instead of an error. A store eviction spares a session saved since the
   scan. A failed release no longer depends on `tests/release.sh` missing the real-file tests: they run there now.
 - The npm package carries `hooks/hunks.tsx`. A release from before this line would not have loaded: `hooks/register.tsx` imports that file

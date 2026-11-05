@@ -12,16 +12,15 @@ export const fileKey = (p: string) => slashed(p).replace(/\/{2,}/g, '/').replace
 
 // No Edit, Write or undo of a file runs beside another of the same file: an undo reads a file and writes it back, and
 // an edit landing in between would be lost. Each file has its own queue, so an Edit waiting on its question holds
-// back no other file's. `keys` undefined waits for every queue and holds them all: an undo.
+// back no other file's. `keys` undefined waits for every queue and holds them all: an undo. `left` lets go of the queue
+// early, for a job that will not run: the jobs behind it then wait only for what they would have waited for without it.
 const tails = new Map<string, Promise<unknown>>()
 let whole: Promise<unknown> = Promise.resolve()
-export const serial = <T,>(keys: readonly string[] | undefined, f: () => Promise<T>): Promise<T> => {
+export const serial = <T,>(keys: readonly string[] | undefined, f: () => Promise<T>, left?: Promise<void>): Promise<T> => {
   const p = Promise.allSettled(keys ? [whole, ...keys.map(k => tails.get(k))] : [whole, ...tails.values()]).then(f)
-  const done = p.catch(() => undefined)
-  if (!keys) {
-    whole = done
-    tails.clear()
-  }
+  const settled = p.catch(() => undefined)
+  const done = left ? Promise.race([settled, left]) : settled
+  if (!keys) whole = done
   for (const k of keys ?? []) {
     tails.set(k, done)
     void done.then(() => { if (tails.get(k) === done) tails.delete(k) })
@@ -32,23 +31,28 @@ export const serial = <T,>(keys: readonly string[] | undefined, f: () => Promise
 /** Why an undo that has not written yet must not write: its budget, an interrupt, or the end of its conversation. */
 export type Why = 'budget' | 'interrupted' | 'ended'
 /** An undo's time to write. `why` is set the moment that time is gone; `over` hands it to whatever waits. */
-export type Turn = { why?: Why; over: Promise<Why>; say: (why: Why) => void }
+export type Turn = { why?: Why; over: Promise<Why>; say: (why: Why) => void; gone?: boolean }
 export const newTurn = (): Turn => {
   let answer: (why: Why) => void = () => {}
   const over = new Promise<Why>(r => { answer = r })
   const turn: Turn = { over, say: why => { turn.why ??= why; answer(turn.why) } }
   return turn
 }
-/** `job` in its queue, unless the turn goes first: then `late` answers at once and the job, still waiting, never runs. One that began is seen through. */
-export const inTurn = async <T,>(turn: Turn, queue: (job: () => Promise<T>) => Promise<T>, job: () => Promise<T>, late: (why: Why) => T): Promise<T> => {
+/** `job` in its queue, unless the turn goes first: then `late` answers at once and the job, still waiting, never runs and
+ * leaves the queue. One that began is seen through, and looks at the turn itself before its last step. */
+export const inTurn = async <T,>(turn: Turn, queue: (job: () => Promise<T>, left: Promise<void>) => Promise<T>, job: () => Promise<T>, late: (why: Why) => T): Promise<T> => {
   let began = false
+  let leave = () => {}
+  const left = new Promise<void>(r => { leave = r })
   const work = queue(async () => {
     if (turn.why) return late(turn.why)
     began = true
     return job()
-  })
+  }, left)
   const first = await Promise.race([work.then(() => undefined), turn.over])
-  return first === undefined || began ? work : late(first)
+  if (first === undefined || began) return work
+  leave()
+  return late(first)
 }
 /** Run when a conversation ends. */
 export const ended = new Set<() => void>()

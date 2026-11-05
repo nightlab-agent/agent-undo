@@ -44,7 +44,7 @@ without running a session. A later engine may differ; the audit that led to this
 - Windows, WSL drives, case-insensitive file systems, sparse index, LFS, git-crypt: not run.
 - `fs.stat` errors other than `ENOENT`: read from the binary, one hand-made test.
 - `tests/world.tsx` and `review2-world.tsx` answer only the git commands the record runs. Real git
-  runs in `tests/git-snapshot.sh` and `tests/git-wipe.sh`. The hand-written one-line patches in the
+  runs in `tests/git-snapshot.sh`, `tests/git-wipe.sh` and the `tests/release-audit*.test.mjs` files. The hand-written one-line patches in the
   older `review-*` worlds carry no tabs and do not go through `tests/engine.tsx`.
 
 ## A fake's result must describe its file
@@ -58,6 +58,7 @@ test about size asserts the size it reached.
 
 `tests/world.tsx` is maps of strings: its `fs.exists` and `hash-object` walk no link, its restore never fails part way
 except where a test wraps it, it knows no permissions or text conversion, it ignores `timeoutMs`, its writes are
-atomic. All of Dex's audit findings A1 to A6 and two panel blockers lived in that gap. So `tests/release-audit.test.mjs`
-runs the compiled hooks on real files, links, modes and git, and is part of `tests/release.sh`. A fault about bytes,
-links, modes or a kill gets its test there, not in the world. No test here runs a real session.
+atomic. The worst faults of the audit lived in that gap. So `tests/release-audit.test.mjs`, `release-audit2`, `3` and `4`
+run the compiled hooks on real files, links, modes and git, and are part of `tests/release.sh`. A fault about bytes,
+links, modes or a kill gets its test there, not in the world. No test here runs a model turn; `tests/native-ask.sh` starts the real engine for its permission verdict.
+The plugin test kit refuses `clock.sleep` and the audit worlds answer it, so a timer path runs both ways only if a test exists in each.

@@ -7,12 +7,13 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import * as fs from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as sleep } from 'node:timers/promises'
 
 const source = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const scratch = await fs.mkdtemp('/tmp/agent-undo-release-audit-')
+const scratch = await fs.mkdtemp(join(tmpdir(), 'agent-undo-release-audit-'))
 after(() => fs.rm(scratch, { recursive: true, force: true }))
 const compiled = join(scratch, 'compiled')
 const types = process.env.CC_TYPES ?? join(source, '.claude-plugin/types/claude-code/index.d.ts')

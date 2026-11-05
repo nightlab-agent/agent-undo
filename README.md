@@ -42,7 +42,8 @@ own diff of that edit, and numbers each hunk:
   tells you what the tool reported. Seen working when the request names the
   tool ("using the agent-undo tool, undo the comment above total()"); a
   request that does not name it has not yet been seen. Where Claude Code would
-  ask before a tool runs, Claude's undo asks you first; a no, a closed question,
+  ask by its permission rules or mode (hooks and the auto-mode classifier are not asked),
+  Claude's undo asks you first; an ask it cannot place is refused; a no, a closed question,
   a conversation that ended meanwhile or a run with no one to answer changes
   nothing, and `/agent-undo` is yours to type. In plan mode it does not ask: it
   refuses.
@@ -76,7 +77,8 @@ own diff of that edit, and numbers each hunk:
   (Claude Code 2.1.312, 2026-11-02): after a resume, the undo tool listed
   the edit made before it; a new session starts with an empty list.
 - Nothing leaves your machine through this mod: it makes no network calls
-  (it runs `git` and, once per repo, `cp` on your machine).
+  (it runs `git` and small system tools, `cp`, `mv`, `mktemp`, `stat`, `chmod`, `find`
+  and `rm`, on your machine).
   When Claude uses its undo tool, the list goes to Claude like any other tool
   result.
 
@@ -123,7 +125,7 @@ came back as committed, and `notes.txt` stayed.
   endings before the command comes back with git's endings. Tested the other way
   round only: a later change of endings is refused.
 - A save in the instant between the last check and the write is lost, as with any two writers: a shell
-  undo's window is one process start, an Edit undo's one file read. A save made
+  undo's window is one process start, an Edit undo's one file read and one process start. A save made
   earlier, during any wait, is seen and refused (`tests/release-audit.test.mjs`).
 - A shell undo keeps a file's permissions as they stand when you undo, read with `stat`. Only the executable bit follows
   the command, and only where git tracks it: other permissions a command changed are not recorded and stay changed.
@@ -175,6 +177,9 @@ came back as committed, and `notes.txt` stayed.
   `core.safecrlf` refusing a file), that command is not recorded, and the
   status line and the list give git's first error line. The next command
   tries again.
+- An undo can stop before it writes: interrupted, out of its hook time behind a snapshot or an Edit at its question, or
+  because its conversation ended. It says so and the file stays. One that fails in a way no step expected says
+  "this undo stopped": read the file before you try again.
 - An Edit that waits past Claude Code's 10 s hook budget behind permission
   questions on the same file lands, but is not listed, so it cannot be undone here.
 - A file you save in your editor while a command runs looks like the
@@ -195,12 +200,12 @@ came back as committed, and `notes.txt` stayed.
   in place. The rename gives the file a new inode, so a hard link to it keeps the old text.
 - In a git repo, around each Bash command: a private index file,
   `.git/agent-undo.index.<id>`, one per running session and removed when it
-  exits (a killed session's is removed a week later by the next session), and
+  exits (a killed session's is removed by the next session after about a week), and
   the snapshots' objects in `.git/objects`
   (what `git add` would store; no commit, no branch, no change to your
   staged files). `git gc` removes the objects once they are about two weeks
   old; the next snapshot then copies your index again.
-- For a shell undo: the file put back, by `git restore --worktree`.
+- For a shell undo: the file put back, by `git restore --worktree`, then `chmod` where its permissions need putting back.
 
 The list is kept with the session's mod state, not in your project. When
 Claude uses its undo tool, the list is a tool result in the conversation,

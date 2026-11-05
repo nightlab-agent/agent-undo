@@ -101,7 +101,7 @@ async function sameAsLeft($: EngineInterface, top: string, f: ShellFile) {
 }
 
 const leftBecause: Record<Why, string> = {
-  budget: 'a snapshot ahead of this undo is still running. Try again in a moment',
+  budget: 'this undo ran out of time. Try again in a moment',
   interrupted: 'this undo was interrupted',
   ended: 'the conversation this undo belonged to has ended',
 }
@@ -117,6 +117,7 @@ export async function undoShell($: EngineInterface, c: Change, h: number | undef
   if (picked.some(k => !files[k])) return `agent-undo: #${c.n} has ${files.length} file(s); no ${arg}.`
   const undone: number[] = []
   const notes: string[] = []
+  let hurt = false
   for (const k of picked) {
     const f = files[k]!
     const ref = `${c.n}.${k + 1}`
@@ -130,11 +131,12 @@ export async function undoShell($: EngineInterface, c: Change, h: number | undef
       const repo = await repoOf($)
       if (!repo) throw new Error('the repo is no longer there')
       // The checks stand behind the wait for the index: a save made during that wait is seen.
-      const no = await inTurn<string | undefined>(turn, job => onIndex($, job), async () => {
+      const no = await inTurn<string | undefined>(turn, job => onIndex($, job, false), async () => {
         // A deleted file has no permissions to keep.
         const had = f.status === 'D' ? { bits: undefined, x: undefined } : await permissions($, c.top!, f.path)
         const why = await refusal($, c, f, name, shown, had)
         if (why !== undefined) return why
+        if (turn.why) return leftBecause[turn.why]
         // An open window (a Bash command or MCP call running now) must not take this undo as its change.
         touched(spelled(c, f.path))
         restoring = true
@@ -149,16 +151,17 @@ export async function undoShell($: EngineInterface, c: Change, h: number | undef
       if (f.status === 'D' && await filtered($, c.top, f.path).catch(() => false)) notes.push(`${ref}: ${name} came back through a git filter, so its bytes may differ from the deleted file`)
     } catch (err) {
       // git takes the old file away before it writes the new one, so a restore that failed may have lost it.
-      const still = !restoring || f.status === 'D' || await sameAsLeft($, c.top, f).catch(() => false)
+      // A deleted file was absent: a restore cut short can have left part of it there.
+      const still = !restoring || (f.status === 'D' ? !(await $.fs.stat(`${c.top}/${f.path}`).catch(() => undefined)) : await sameAsLeft($, c.top, f).catch(() => false))
+      hurt ||= !still
       notes.push(still ? `${ref} left as is: git said ${gitSaid(err)}`
         : `${ref} failed part way: ${name} no longer reads as it did and git said ${gitSaid(err)}. Its version from before the command: git restore --source=${c.tree} -- ${f.path}`)
     }
   }
-  if (undone.length > 0) {
-    await updateList($, all => all.map(x => (x.n !== c.n ? x : { ...x, files })))
-  }
+  // The list is the next conversation's by now, and its numbers are not this one's.
+  if (undone.length > 0 && !turn.gone) await updateList($, all => all.map(x => (x.n !== c.n ? x : { ...x, files })))
   const did = undone.length > 0
     ? `undid ${undone.map(k => `${c.n}.${k + 1}`).join(', ')}: ${undone.map(k => shown(spelled(c, files[k]!.path))).join(', ')}`
-    : 'nothing changed'
+    : hurt ? 'this undo failed part way' : 'nothing changed'
   return [`agent-undo: ${did}.`, ...notes].join('\n')
 }

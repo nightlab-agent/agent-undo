@@ -101,13 +101,15 @@ export async function repoOf($: EngineInterface): Promise<Repo | undefined> {
 // Snapshots and restores share one index file, so they take turns; the commands do not wait.
 let snaps: Promise<unknown> = Promise.resolve()
 let lastIndex: string | undefined
-// Each git call ends at its own timeout, so this bound is for one that never comes back: the queue goes on without it.
+// Each git call ends at its own timeout, so this bound is for a snapshot whose git never comes back: the queue goes on
+// without it. An undo has no bound: a command let in beside a live restore would record the restore as its own change.
 const HOLD_MS = 180000
-export function onIndex<T>($: EngineInterface, f: () => Promise<T>): Promise<T> {
+export function onIndex<T>($: EngineInterface, f: () => Promise<T>, held = true): Promise<T> {
   const p = snaps.then(f)
   snaps = snaps.then(async () => {
-    const stop = new AbortController()
     const turn = p.catch(() => undefined)
+    if (!held) return turn
+    const stop = new AbortController()
     // A sleep refused (a mod above denies it) is no bound: the queue waits for the turn, as it did before there was one.
     await Promise.race([turn, $.clock.sleep(HOLD_MS, { signal: stop.signal }).catch(() => turn)])
     stop.abort()

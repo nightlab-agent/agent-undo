@@ -76,7 +76,7 @@ async function putBack($: EngineInterface, file: string, real: string, was: stri
   if (!made) {
     if (await moved()) return changed
     // user file: an undo puts the user's own file back as it was.
-    await $.fs.write(real, text)
+    await $.fs.write(file, text)
     return undefined
   }
   const tmp = made.stdout.trim()

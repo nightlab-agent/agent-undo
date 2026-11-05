@@ -30,6 +30,21 @@ const editedText = (o: FileOut): string | undefined => {
   return all ? was.replaceAll(from, () => b) : was.replace(from, () => b)
 }
 
+/**
+ * Whether each U+FFFD in `text` is one the file really holds: a byte that is not UTF-8 reads as U+FFFD too, and
+ * writing the text back would replace it. Bytes that cannot be read prove nothing, and the answer is no.
+ */
+const holdsItsBytes = async ($: EngineInterface, file: string, text: string) => {
+  try {
+    const b = Uint8Array.fromBase64((await $.fs.read(file, { as: 'bytes' })).base64)
+    let real = 0
+    for (let i = 0; i + 2 < b.length; i++) if (b[i] === 0xef && b[i + 1] === 0xbf && b[i + 2] === 0xbd) real++
+    return real === text.split('\uFFFD').length - 1
+  } catch {
+    return false
+  }
+}
+
 /** The change number and hunk number of `3` or `3.2`. */
 export const parseRef = (arg: string): { n: number; h?: number } | undefined => {
   const m = /^#?(\d+)(?:\.(\d+))?$/.exec(arg.trim())
@@ -100,6 +115,9 @@ async function run($: EngineInterface, args: string): Promise<string> {
   if (picked.some(k => !c.hunks[k])) return `agent-undo: #${c.n} has ${c.hunks.length} hunk(s); no ${arg}.`
   if (!(await $.fs.exists(c.file))) return `agent-undo: ${shown(c.file)} is gone; nothing changed.`
   let text = await $.fs.read(c.file)
+  if (text.includes('\uFFFD') && !(await holdsItsBytes($, c.file, text))) {
+    return `agent-undo: ${shown(c.file)} has bytes that are not UTF-8 and writing it would replace them; nothing changed.`
+  }
   const undone: number[] = []
   const notes: string[] = []
   const moves: Move[] = []

@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- An undo refuses a file holding bytes that are not UTF-8. Before, the undo read the file as text, where each such
+  byte shows as U+FFFD, and wrote that text back: the undo said it worked and the bytes were gone. A real U+FFFD
+  in good UTF-8 is still fine (`tests/bytes.test.tsx`; not seen on a screen).
 - A shell undo no longer replaces what stands where a deleted file's folder was. Before, a file or link saved at
   that folder's name was replaced by the folder, and that file was in no snapshot, so it was lost; a link leading
   nowhere at the file's own path was replaced too. Now each is refused (`tests/shell-undo.test.tsx`, fake git; real

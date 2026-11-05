@@ -11,9 +11,14 @@ export const at = (file: string) => `${ROOT}/${file}`
 
 type Answer = (result: Record<string, unknown>) => Record<string, unknown>
 
+const rawBytes = new WeakMap<Map<string, string>, Map<string, number[] | 'unreadable'>>()
+/** What `$.fs.read(path, { as: 'bytes' })` answers for a file, where it is not the text's UTF-8. */
+export const bytesOf = (files: Map<string, string>) => rawBytes.get(files)!
+
 /** `answer` changes a tool's result, for what the fake does not build itself (a diff that timed out). */
 export const editWorld = (on: On, files0: Record<string, string> = {}, answer: Answer = r => r) => {
   const files = new Map(Object.entries(files0).map(([k, v]) => [at(k), v]))
+  rawBytes.set(files, new Map())
   on('session.root', () => ({ value: ROOT }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('command.register', () => ({ value: { command: 'agent-undo' } }))
@@ -21,7 +26,10 @@ export const editWorld = (on: On, files0: Record<string, string> = {}, answer: A
   on('fs.read', (_, e) => {
     const t = files.get(e.path)
     if (t === undefined) throw new Error('ENOENT')
-    return { value: t }
+    if ((e as { as?: string }).as !== 'bytes') return { value: t }
+    const raw = bytesOf(files).get(e.path) ?? [...new TextEncoder().encode(t)]
+    if (raw === 'unreadable') throw new Error('EIO')
+    return { value: { base64: btoa(String.fromCharCode(...raw)) } } as never
   })
   on('fs.write', (_, e) => { files.set(e.path, e.text); return { value: undefined } })
   on('tool.call', (_, e) => {

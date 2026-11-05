@@ -137,10 +137,11 @@ came back as committed, and `notes.txt` stayed.
   subagents), files outside the git repo you started Claude Code in, and
   files git ignores. Files that Edit or Write changed while a command ran
   stay with their own entry.
-- When a command goes on in the background (asked about or not), shell
-  commands stop being recorded for the rest of the session, and the list
-  says so: its later writes would look like the next command's. A process
-  a command starts with `&` is not seen as a background command.
+- When a command goes on in the background (asked about or not, a Monitor
+  command too), shell commands stop being recorded for the rest of the
+  session, and the list says so: its later writes would look like the next
+  command's. A process a command starts with `&` is not seen as a background
+  command.
 - A file you save in your editor while a command runs looks like the
   command's. The check above still refuses an undo once you change it again.
 - Every command that runs without a question waits for two git snapshots,

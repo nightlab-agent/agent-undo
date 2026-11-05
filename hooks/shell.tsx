@@ -264,6 +264,8 @@ export async function undoShell($: EngineInterface, c: Change, h: number | undef
 
 type Verdict = { decision: string }
 type Done = { deny?: unknown; isError?: unknown; result?: unknown }
+/** Bash answers with this id when a command goes on (`run_in_background`, or moved there later). */
+const backgrounded = (done: Done) => (done.result as { backgroundTaskId?: unknown } | undefined)?.backgroundTaskId !== undefined
 
 /** The engine's decision for one wrapped call: an "allow" with no question first takes the before-snapshot. */
 async function checked<V extends Verdict>($: EngineInterface, id: unknown, verdict: V): Promise<V> {
@@ -283,7 +285,7 @@ async function checked<V extends Verdict>($: EngineInterface, id: unknown, verdi
 
 /** One wrapped call: run it, then snapshot again and record the files that differ, as `tool` named `label`. */
 async function around<D extends Done>($: EngineInterface, rawId: unknown, agent: string | undefined, tool: 'Bash' | 'MCP',
-  label: string, call: () => Promise<D>): Promise<D> {
+  label: string, call: () => Promise<D>, goesOn: (done: D) => boolean = backgrounded): Promise<D> {
   const id = typeof rawId === 'string' ? rawId : undefined
   // Only a call this hook wraps gets a snapshot (its check runs inside the call); while it runs,
   // every other open window is overlapped (by an MCP call only if it does not end read-only).
@@ -304,7 +306,7 @@ async function around<D extends Done>($: EngineInterface, rawId: unknown, agent:
   const sh = take(id)
   // Any command that goes on in the background, recorded or not (one approved at a prompt too),
   // could write into a later command's window.
-  if (done.deny === undefined && (done.result as { backgroundTaskId?: unknown } | undefined)?.backgroundTaskId !== undefined) {
+  if (done.deny === undefined && goesOn(done)) {
     stop($, `a command went on in the background at ${time(new Date().toISOString())}, and its later writes would land in any later record`,
       'agent-undo: shell commands no longer recorded (one runs in the background) · /agent-undo')
   }
@@ -372,6 +374,11 @@ export const registerShell = (on: Parameters<Register>[0]) => {
 
   on('tool.call', { tool: 'Bash' }, async ($, e, next) =>
     around($, e.tool_use_id, e.agentId, 'Bash', commandLabel((e as { command?: unknown }).command), () => next(e)))
+
+  // A Monitor's command goes on after the tool answers. Any answer but an error counts, so a renamed field in its
+  // result cannot turn this off; a `ws` watch runs no command here. The declared fields are in tests/background.test.tsx.
+  on('tool.call', { tool: 'Monitor' }, async ($, e, next) => (e.ws !== undefined && e.command === undefined ? next(e)
+    : around($, e.tool_use_id, e.agentId, 'Bash', 'Monitor', () => next(e), done => !done.isError)))
 
   // MCP tools write files Claude Code's checkpoints do not track: each call is recorded as a Bash
   // command is, sharing its windows (a call beside a command or another call is not recorded, unless the other is an MCP call that ended

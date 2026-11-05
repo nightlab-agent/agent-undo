@@ -45,8 +45,9 @@ export type Repo = {
   /** `.gitattributes` as git reads it: the filter set on a path. */
   filters: Record<string, string>
   /** Any other tool (an MCP tool, or an unknown one), by name: what it does to the files; 'error' answers an
-   * error, 'read-only' answers as core does a call the tool held read-only (`isReadOnly`). */
-  tools: Record<string, (f: Map<string, string>) => void | 'error' | 'read-only' | Promise<void | 'error' | 'read-only'>>
+   * error, 'read-only' answers as core does a call the tool held read-only (`isReadOnly`); an object is the tool's
+   * own record, as a built-in tool answers (Monitor's `{ taskId, timeoutMs }`). */
+  tools: Record<string, (f: Map<string, string>) => void | 'error' | 'read-only' | object | Promise<void | 'error' | 'read-only' | object>>
 }
 
 export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: boolean; top?: string } = {}): Repo => {
@@ -157,6 +158,7 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
       // As core answers an MCP tool: its content blocks, or an error the model reads.
       const said = await tool(repo.files)
       if (said === 'error') return { isError: true, result: 'Error: boom', text: 'Error: boom' } as never
+      if (typeof said === 'object') return { result: said, text: 'ok' } as never
       return { result: [{ type: 'text', text: 'ok' }], text: 'ok', ...(said === 'read-only' ? { isReadOnly: true } : {}) } as never
     }
     throw new Error(`unexpected tool ${x.tool}`)

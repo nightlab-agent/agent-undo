@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- A Monitor command now stops recording the way a background Bash command does. Before, it went on running and its
+  writes were listed under the next command. A Monitor on a socket runs no command here and changes nothing
+  (`tests/background.test.tsx`; the tool's input and answer are from the declarations, no real Monitor was run).
 - Recording stays off after a background command when the engine fires its start hook again in a running process.
   Before, that second start turned recording back on, and the command's later writes landed in the next record; a
   command running at that moment also lost its own record. A /clear or a resume still starts fresh

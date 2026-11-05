@@ -168,6 +168,8 @@ test('for comparison, the same two undos one after the other', async ($, on) => 
 })
 
 test('an Edit by Claude (or a subagent) that lands while an undo reads the file is kept', async ($, on) => {
+  // The kit refuses a clock.sleep; an Edit behind an undo takes that as a wait that did not happen and stops.
+  on('clock.sleep', () => new Promise(() => {}))
   // The Edit starts while the undo is reading. It is not awaited inside the read: the engine's
   // fs.read never waits on a tool call (awaiting it here would deadlock on the mod's own queue).
   let during: (() => Promise<unknown>) | undefined

@@ -2,94 +2,32 @@ import { atom, read } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Change, Hunk } from '../types'
+import { hunksFrom, undoAt } from './hunks'
+import type { Patch } from './hunks'
 import { editing, forgetRestore, record, restoreList, serial, showNewest, slashed, snapped, time, updateList } from './common'
 import { ownTool, registerShell, resetShells, shellStopped, spelled, undoShell } from './shell'
 
 // The session's list (the same plugin, key and shape in each file that reads or writes it: the
 // engine's scan lists a module's state per file). Change the tag in both (and SHAPE in common.tsx) when a Change's
 // fields change: it declines what an earlier version stored.
-const changes = atom({ plugin: 'agent-undo', key: 'changes' } as const, [], { shape: 'changes-2' })
+const changes = atom({ plugin: 'agent-undo', key: 'changes' } as const, [], { shape: 'changes-3' })
 
 export { fileKey } from './common'
 export { filesOf, isMcp, mcpLabel } from './shell'
+export { hunksOf, undoHunk } from './hunks'
 
-
-
-type Patch = { newStart: number; lines: string[] }[]
 /** The fields of an Edit or Write result read here, typed whether or not the engine's tool results are declared. */
-type FileOut = { filePath: string; structuredPatch?: Patch; staged?: unknown; type?: string; originalFile?: string | null }
+type FileOut = { filePath: string; structuredPatch?: Patch; staged?: unknown; type?: string; originalFile?: string | null
+  content?: string; oldString?: string; newString?: string; replaceAll?: boolean }
 
-/** Each hunk of an engine diff as the lines before and after it, context included. */
-export const hunksOf = (patch: Patch): Hunk[] =>
-  patch.map(p => {
-    const h: Hunk = { before: [], after: [], line: p.newStart }
-    let prev = ' '
-    for (const l of p.lines) {
-      // "\ No newline at end of file" follows the last line of the side(s) it belongs to.
-      if (l.startsWith('\\')) {
-        if (prev !== '+') h.beforeNoEol = true
-        if (prev !== '-') h.afterNoEol = true
-        continue
-      }
-      prev = l[0] ?? ' '
-      if (prev !== '+') h.before.push(l.slice(1))
-      if (prev !== '-') h.after.push(l.slice(1))
-    }
-    return h
-  })
-
-type Row = { t: string; e: string }
-
-/** The file as lines, each with its own ending ('' for a last line without one). */
-const rowsOf = (text: string): Row[] => {
-  const parts = text.split(/(\r\n|\n)/)
-  const rows: Row[] = []
-  for (let k = 0; k < parts.length; k += 2) rows.push({ t: parts[k] ?? '', e: parts[k + 1] ?? '' })
-  const last = rows[rows.length - 1]
-  if (last && last.t === '' && last.e === '') rows.pop()
-  return rows
-}
-
-/**
- * The file's text with one hunk put back as it was, and where, or why not. The hunk's
- * after-lines must still stand in the file, word for word: where the person (or a later edit)
- * changed them, nothing is touched. Found in more than one place, only the place the edit left
- * them counts. Every other line keeps its own line ending.
- */
-const undoAt = (text: string, hunk: Hunk): { text: string; at: number } | { refused: string } => {
-  const rows = rowsOf(text)
-  const crlf = rows.filter(r => r.e === '\r\n').length
-  const eol = crlf > rows.filter(r => r.e === '\n').length ? '\r\n' : '\n'
-  const { before, after } = hunk
-  const at: number[] = []
-  if (after.length === 0) {
-    if (rows.length > 0) return { refused: 'the file is no longer empty, as the edit left it' }
-    at.push(0)
-  }
-  for (let i = 0; after.length > 0 && i + after.length <= rows.length; i++) {
-    if (after.every((l, j) => rows[i + j]!.t === l)) at.push(i)
-  }
-  if (at.length === 0) return { refused: 'those lines have changed since the edit' }
-  const expected = hunk.line - 1
-  const i = at.length === 1 ? at[0]! : at.includes(expected) ? expected : undefined
-  if (i === undefined) return { refused: `those lines appear ${at.length} times and none where the edit left them` }
-  const atEnd = i + after.length === rows.length
-  const put: Row[] = before.map((t, j) => {
-    const e = j < after.length ? rows[i + j]!.e : eol
-    return { t, e: e === '' ? eol : e }
-  })
-  const lastPut = put[put.length - 1]
-  // The final newline: as the diff says the file had it before the edit; else as the file has it now.
-  if (atEnd && lastPut) {
-    lastPut.e = hunk.beforeNoEol ? '' : hunk.afterNoEol || rows.length === 0 ? eol : rows[rows.length - 1]!.e
-  }
-  rows.splice(i, after.length, ...put)
-  return { text: rows.map(r => r.t + r.e).join(''), at: i }
-}
-
-export const undoHunk = (text: string, hunk: Hunk): { text: string } | { refused: string } => {
-  const got = undoAt(text, hunk)
-  return 'refused' in got ? got : { text: got.text }
+/** The new file an Edit left, worked out as the engine works it out: the result does not hold it. The engine may have
+ * changed the new string first (curly quotes), and hunksFrom takes no line this gets wrong. */
+const editedText = (o: FileOut): string | undefined => {
+  const { originalFile: was, oldString: a, newString: b, replaceAll: all } = o
+  if (typeof was !== 'string' || typeof a !== 'string' || typeof b !== 'string') return undefined
+  if (a === '') return b
+  const from = b === '' && !a.endsWith('\n') && was.includes(`${a}\n`) ? `${a}\n` : a
+  return all ? was.replaceAll(from, () => b) : was.replace(from, () => b)
 }
 
 /** The change number and hunk number of `3` or `3.2`. */
@@ -221,7 +159,7 @@ export const register: Register = on => {
     try {
       const out = done.deny === undefined && !done.isError ? (done.result as FileOut | undefined) : undefined
       if (!out || out.staged) return done
-      const hunks = hunksOf(out.structuredPatch ?? [])
+      const hunks = hunksFrom(out.structuredPatch ?? [], out.originalFile, editedText(out)) ?? []
       await record($, {
         at: new Date().toISOString(), tool: 'Edit', file: out.filePath, agent: e.agentId,
         hunks, ...(hunks.length === 0 ? { tooLarge: true } : {}),
@@ -238,10 +176,10 @@ export const register: Register = on => {
       const out = done.deny === undefined && !done.isError ? (done.result as FileOut | undefined) : undefined
       if (!out || out.staged) return done
       const created = out.type === 'create'
-      const hunks = created ? [] : hunksOf(out.structuredPatch ?? [])
+      const hunks = created ? [] : hunksFrom(out.structuredPatch ?? [], out.originalFile, out.content)
       await record($, {
-        at: new Date().toISOString(), tool: 'Write', file: out.filePath, agent: e.agentId, hunks,
-        ...(created ? { created: true } : hunks.length === 0 && out.originalFile === null ? { tooLarge: true } : {}),
+        at: new Date().toISOString(), tool: 'Write', file: out.filePath, agent: e.agentId, hunks: hunks ?? [],
+        ...(created ? { created: true } : hunks ? {} : { tooLarge: true }),
       })
     } catch {
       // A failure of this mod never changes the write.

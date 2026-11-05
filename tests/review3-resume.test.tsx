@@ -85,7 +85,7 @@ const undo = async ($: $T, args: string) => ((await $.command.run({ command: 'ag
 
 /** A stored list as this version writes it: `n` one-hunk edits whose lines are `width` characters. */
 const stored = (file: string, n: number, width: number) => ({
-  shape: 'changes-2',
+  shape: 'changes-3',
   list: Array.from({ length: n }, (_, k) => ({
     n: k + 1, at: '2026-11-02T10:00:00.000Z', tool: 'Edit', file: `${ROOT}/${file}`,
     hunks: [{ before: ['x'.repeat(width)], after: ['y'.repeat(width)], line: 1 }],

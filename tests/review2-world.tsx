@@ -3,6 +3,7 @@
 // repo (a git command run anywhere else fails, as real git does).
 import type { On, $T, Script } from './world'
 import { blob } from './world'
+import { editResult } from './engine'
 
 export type World2 = { files: Map<string, string>; scripts: Record<string, Script>; runs: string[][] }
 
@@ -81,11 +82,9 @@ export const world2 = (on: On, o: { root: string; gitTop: string; prefix: string
       return { result: { stdout: '', stderr: '', interrupted: false } } as never
     }
     if (x.tool === 'Edit') {
-      const was = w.files.get(x.file_path!)!
-      const now = was.replace(x.old_string!, x.new_string!)
-      w.files.set(x.file_path!, now)
-      return { result: { filePath: x.file_path, oldString: x.old_string, newString: x.new_string, originalFile: was,
-        structuredPatch: [], userModified: false, replaceAll: false } } as never
+      const { disk, result } = editResult(w.files.get(x.file_path!)!, x as Parameters<typeof editResult>[1])
+      w.files.set(x.file_path!, disk)
+      return { result } as never
     }
     throw new Error(`unexpected tool ${x.tool}`)
   })

@@ -84,7 +84,7 @@ const all = { 'a.txt': 'one\n' }
 // Another conversation's copy with `chars` characters of list text, of `ch` (a few large Writes make 1 MiB).
 const copy = (w: { disk: Map<string, unknown> }, id: string, at: number, chars: number, ch: string) => {
   w.disk.set(`at:${id}`, at)
-  w.disk.set(`changes:${id}`, { shape: 'changes-2', list: [{ n: 1, at: '2026-11-03T00:00:00.000Z', tool: 'Write', file: `/proj/${id}.txt`, hunks: [], pad: ch.repeat(chars) }] })
+  w.disk.set(`changes:${id}`, { shape: 'changes-3', list: [{ n: 1, at: '2026-11-03T00:00:00.000Z', tool: 'Write', file: `/proj/${id}.txt`, hunks: [], pad: ch.repeat(chars) }] })
 }
 const MiB = 1024 * 1024
 const run = async ($: $T, on: On, opts: { ch: string; each: number; refusals: number }) => {

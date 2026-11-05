@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- An edit to tab-indented code can be undone, and an undo gives the tabs back. Claude Code's diff shows a
+  leading tab as two spaces, so before, a changed tab line was refused, and a tab changed to spaces came back as
+  two spaces while the undo said it worked. Hunks now take their words from the file's own text and the diff
+  only for places. A list stored by an earlier version is no longer read: its hunks hold the diff's words
+  (`tests/tabs.test.tsx`; not seen on a screen).
 - The npm description fits the registry's 255 characters; it was cut in the middle of a word.
 - A stored copy that needs more room than one other conversation's copy now takes as many of the
   oldest copies as it needs, and no more; before, one went, the store still refused, and a /resume

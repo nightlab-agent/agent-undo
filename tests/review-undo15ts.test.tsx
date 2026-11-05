@@ -156,7 +156,7 @@ test('review-undo15ts B1 comparison: the command recorded before the /clear, s1\
 // and bound settles first decides whether the copy is read or restore() gives up (late set, common.tsx:188).
 const resumeStored = async ($: $T, w: W) => {
   w.disk.set('at:s1', 1)
-  w.disk.set('changes:s1', { shape: 'changes-2', list: [{ n: 1, at: '2026-11-03T00:00:00.000Z', tool: 'Edit', file: `${ROOT}/a.txt`, hunks: [] }] })
+  w.disk.set('changes:s1', { shape: 'changes-3', list: [{ n: 1, at: '2026-11-03T00:00:00.000Z', tool: 'Edit', file: `${ROOT}/a.txt`, hunks: [] }] })
   await start($); await settle(); await wait(50)
   return w.statuses.filter(s => s.startsWith('#'))
 }

@@ -67,8 +67,8 @@ const world = (on: On) => {
 type W = ReturnType<typeof world>
 const list = (w: W) => (w.state.get(stateKey)?.value as { value: Change[] }).value
 const stored = (w: W) => (w.disk.get('changes:s1') as { list: Change[] }).list
-const putList = (w: W, value: Change[]) => w.state.set(stateKey, { value: { shape: 'changes-2', value: clone(value) }, version: (w.state.get(stateKey)?.version ?? 0) + 1 })
-const seed = (w: W, value: Change[]) => w.disk.set('changes:s1', { shape: 'changes-2', list: clone(value) })
+const putList = (w: W, value: Change[]) => w.state.set(stateKey, { value: { shape: 'changes-3', value: clone(value) }, version: (w.state.get(stateKey)?.version ?? 0) + 1 })
+const seed = (w: W, value: Change[]) => w.disk.set('changes:s1', { shape: 'changes-3', list: clone(value) })
 const start = ($: $T) => $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
 const undo = async ($: $T, args = '') => (await $.command.run({ command: 'agent-undo', args } as never) as { text: string }).text
 const edit = ($: $T, file = 'next.txt', text = 'NEW') => $.tool.call({ tool: 'Edit', file_path: `${ROOT}/${file}`, old_string: 'old', new_string: text } as never)

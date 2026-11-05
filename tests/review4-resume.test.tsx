@@ -94,7 +94,7 @@ const edit = ($: $T, file: string, a: string, b: string) =>
 const undo = async ($: $T, args: string) => ((await $.command.run({ command: 'agent-undo', args } as never)) as { text: string }).text
 
 const stored = (file: string, n: number, width: number) => ({
-  shape: 'changes-2',
+  shape: 'changes-3',
   list: Array.from({ length: n }, (_, k) => ({
     n: k + 1, at: '2026-11-02T10:00:00.000Z', tool: 'Edit', file: `${ROOT}/${file}`,
     hunks: [{ before: ['x'.repeat(width)], after: ['y'.repeat(width)], line: 1 }],

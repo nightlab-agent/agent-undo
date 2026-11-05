@@ -84,7 +84,7 @@ const wide = async ($: $T, n: number) => { for (let k = 1; k <= n; k++) await ed
 // Another conversation's stored copy of about `kb` KB (one entry, one long line).
 const other = (w: W, id: string, at: number, kb: number) => {
   w.disk.set(atOf(id), at)
-  w.disk.set(`changes:${id}`, { shape: 'changes-2', list: [{ n: 1, at: '2026-11-03T00:00:00.000Z', tool: 'Edit', file: `/x/${id}.txt`,
+  w.disk.set(`changes:${id}`, { shape: 'changes-3', list: [{ n: 1, at: '2026-11-03T00:00:00.000Z', tool: 'Edit', file: `/x/${id}.txt`,
     hunks: [{ before: [], after: ['y'.repeat(kb * 1000)], line: 1 }] }] })
 }
 const atOf = (id: string) => `at:${id}`

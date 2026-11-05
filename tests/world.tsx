@@ -9,6 +9,7 @@
 // while the command keeps running), a hook may run inside a snapshot's `git add -A`, and `top`
 // lets the repo top git reports differ from the session root (a symlinked folder).
 import type { TestBody } from 'claude-code/testing'
+import { editResult } from './engine'
 
 export type On = Parameters<TestBody>[1]
 export type $T = Parameters<TestBody>[0]
@@ -129,11 +130,9 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
       return { result: { stdout: '', stderr: '', interrupted: false } } as never
     }
     if (x.tool === 'Edit') {
-      const was = repo.files.get(x.file_path!)!
-      const now = was.replace(x.old_string!, x.new_string!)
-      repo.files.set(x.file_path!, now)
-      return { result: { filePath: x.file_path, oldString: x.old_string, newString: x.new_string, originalFile: was,
-        structuredPatch: [], userModified: false, replaceAll: false } } as never
+      const { disk, result } = editResult(repo.files.get(x.file_path!)!, x as Parameters<typeof editResult>[1])
+      repo.files.set(x.file_path!, disk)
+      return { result } as never
     }
     const tool = repo.tools[x.tool]
     if (tool) {

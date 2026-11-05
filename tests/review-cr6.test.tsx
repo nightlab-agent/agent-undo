@@ -161,7 +161,7 @@ test('review-cr6 H3 comparison: the undo\'s write lands at 0.3 s: the copy holds
 // lingering hook past lingerMs) or a busy file then costs another conversation its undo list.
 test('review-cr6 P1: at:s1 refused once as EBUSY, not the cap: s0\'s copy stays', { timeoutMs: 20000 }, async ($, on) => {
   const w = world(on, all)
-  w.disk.set('at:s0', 1); w.disk.set('changes:s0', { shape: 'changes-2', list: [{ n: 1, at: '2026-11-03T00:00:00.000Z', tool: 'Edit', file: '/proj/z.txt', hunks: [] }] })
+  w.disk.set('at:s0', 1); w.disk.set('changes:s0', { shape: 'changes-3', list: [{ n: 1, at: '2026-11-03T00:00:00.000Z', tool: 'Edit', file: '/proj/z.txt', hunks: [] }] })
   await start($); await settle()
   w.rejectOnce = 'at:s1'
   await edit($, 'a.txt', 'one', 'ONE'); await settle()
@@ -170,7 +170,7 @@ test('review-cr6 P1: at:s1 refused once as EBUSY, not the cap: s0\'s copy stays'
 })
 test('review-cr6 P1 comparison: at:s1 refused never: s0\'s copy stays', { timeoutMs: 20000 }, async ($, on) => {
   const w = world(on, all)
-  w.disk.set('at:s0', 1); w.disk.set('changes:s0', { shape: 'changes-2', list: [{ n: 1, at: '2026-11-03T00:00:00.000Z', tool: 'Edit', file: '/proj/z.txt', hunks: [] }] })
+  w.disk.set('at:s0', 1); w.disk.set('changes:s0', { shape: 'changes-3', list: [{ n: 1, at: '2026-11-03T00:00:00.000Z', tool: 'Edit', file: '/proj/z.txt', hunks: [] }] })
   await start($); await settle()
   await edit($, 'a.txt', 'one', 'ONE'); await settle()
   expect(w.disk.has('changes:s0')).toBe(true)

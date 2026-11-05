@@ -61,27 +61,34 @@ async function reached($: EngineInterface, file: string) {
 }
 
 /**
- * The file as `text`, in one step: a temporary copy keeping its permissions, then a rename, so an undo killed
- * halfway leaves the file whole (`$.fs.write` empties it first). With no `cp` or `mv` to hand, a plain write.
- * False when the file no longer reads as `was`: a save landed during the undo, and it stays.
+ * The file as `text`, in one step: a new temporary file beside it with its permissions, then a rename, so an undo killed
+ * halfway leaves the file whole (`$.fs.write` empties it first). `real` is where the checks found it. The answer is why
+ * the file stayed as it was, or undefined once it is done. With no `mktemp`, `cp` or `mv` on the machine, a plain write.
  */
-async function putBack($: EngineInterface, file: string, was: string, text: string) {
-  const real = (await $.fs.stat(file, { resolve: true }).catch(() => undefined))?.realPath ?? file
-  const cut = real.lastIndexOf('/') + 1
-  const tmp = `${real.slice(0, cut)}.agent-undo-${INDEX_TAG}-${real.slice(cut)}`
-  const run = (...argv: string[]) => $.process.run(argv, { cwd: real.slice(0, cut) || '.' }).catch(() => undefined)
-  touched(tmp)
-  if ((await run('cp', '-p', real, tmp))?.exitCode !== 0) {
-    if ((await $.fs.read(file)) !== was) return false
-    await $.fs.write(file, text)
-    return true
+async function putBack($: EngineInterface, file: string, real: string, was: string, text: string) {
+  const folder = real.slice(0, real.lastIndexOf('/') + 1)
+  const run = (...argv: string[]) => $.process.run(argv, { cwd: folder || '.' }).catch(() => undefined)
+  const moved = async () => ((await $.fs.stat(file, { resolve: true }).catch(() => undefined))?.realPath ?? file) !== real ||
+    (await $.fs.read(real)) !== was
+  const changed = 'changed during this undo'
+  // mktemp makes the name its own, however long the file's is, and never takes a name already there.
+  const made = await run('mktemp', `${folder}.agent-undo-${INDEX_TAG}-XXXXXXXX`)
+  if (!made) {
+    if (await moved()) return changed
+    await $.fs.write(real, text)
+    return undefined
   }
+  const tmp = made.stdout.trim()
+  if (made.exitCode !== 0 || !tmp) return `has no room for a temporary copy beside it (${made.stderr.trim().split('\n')[0]})`
+  touched(tmp)
   try {
+    const copy = await run('cp', '-p', real, tmp)
+    if (copy?.exitCode !== 0) return `could not be copied (${copy?.stderr.trim().split('\n')[0] ?? 'no cp'})`
     await $.fs.write(tmp, text)
-    if ((await $.fs.read(file)) !== was) return false
-    const moved = await run('mv', '-f', tmp, real)
-    if (moved?.exitCode !== 0) throw new Error(moved?.stderr.trim() || 'mv failed')
-    return true
+    if (await moved()) return changed
+    const mv = await run('mv', '-f', tmp, real)
+    if (mv?.exitCode !== 0) throw new Error(mv?.stderr.trim() || 'mv failed')
+    return undefined
   } finally {
     await run('rm', '-f', tmp)
   }
@@ -195,7 +202,8 @@ async function run($: EngineInterface, args: string): Promise<string> {
     // An open window (a Bash command or MCP call running now) must not take this undo as its change.
     // editing() also covers a window that opens while the write is in flight.
     // user file: an undo puts the user's own file back as it was.
-    if (!(await editing(c.file, () => putBack($, c.file, was, text)))) return `agent-undo: ${shown(c.file)} changed during this undo; nothing changed.`
+    const stayed = await editing(c.file, () => putBack($, c.file, lands?.realPath ?? c.file, was, text))
+    if (stayed !== undefined) return `agent-undo: ${shown(c.file)} ${stayed}; nothing changed.`
     const once = onceIn(text)
     const gone = new Set(undone)
     const hunks = c.hunks.map((o, k) => { const h = acrossUndo(o, moves, once); return gone.has(k) ? { ...h, undone: true } : h })

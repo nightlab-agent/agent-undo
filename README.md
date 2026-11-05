@@ -148,6 +148,17 @@ came back as committed, and `notes.txt` stayed.
   subagents), files outside the git repo you started Claude Code in, and
   files git ignores. Files that Edit or Write changed while a command ran
   stay with their own entry.
+- Two Claude Code sessions in one checkout do not know of each other's
+  commands: if one session's command runs inside another's, the longer
+  command's entry also lists the shorter one's files. The list shows every
+  file, so undo the one you mean (`3.1`, not `3`).
+- A folder you cannot write in is refused, even for a file you can write:
+  there is no room for the temporary copy that keeps the file whole if an
+  undo is killed. Where `mktemp`, `cp` or `mv` is missing (a machine with no
+  Unix tools), an undo writes the file directly, without that protection.
+- With more sessions than the store keeps, one being saved at the very
+  moment the oldest copy is dropped can lose its stored list until its next
+  save. No file is touched.
 - When a command goes on in the background (asked about or not, a Monitor
   command too), shell commands stop being recorded for the rest of the
   session, and the list says so: its later writes would look like the next

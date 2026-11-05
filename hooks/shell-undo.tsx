@@ -29,6 +29,16 @@ async function executable($: EngineInterface, top: string, path: string) {
   }
 }
 
+/** Whether the file holds an executable bit git is told to ignore: `git restore` takes that bit away all the same. */
+async function looseExecutable($: EngineInterface, top: string, path: string) {
+  try {
+    const off = await $.process.run(['git', 'config', '--type=bool', 'core.filemode'], { cwd: top })
+    return off.stdout.trim() === 'false' && (await $.process.run(['test', '-x', path], { cwd: top })).exitCode === 0
+  } catch {
+    return false
+  }
+}
+
 /** Why the file at `f` cannot be put back as it stands, or nothing. Runs right before the restore, after any wait for the index. */
 async function refusal($: EngineInterface, c: Change, f: ShellFile, name: string, shown: (f: string) => string) {
   const top = c.top!
@@ -95,8 +105,10 @@ export async function undoShell($: EngineInterface, c: Change, h: number | undef
         if (why !== undefined) return why
         // An open window (a Bash command or MCP call running now) must not take this undo as its change.
         touched(spelled(c, f.path))
+        const loose = await looseExecutable($, c.top!, f.path)
         restoring = true
         await git($, ['restore', `--source=${c.tree}`, '--worktree', '--', `:(literal)${f.path}`], c.top!, repo.env)
+        if (loose && (await $.process.run(['chmod', '+x', `./${f.path}`], { cwd: c.top! })).exitCode !== 0) notes.push(`${ref}: ${name} lost its executable bit`)
         return undefined
       })
       if (no !== undefined) { notes.push(`${ref} left as is: ${no}`); continue }

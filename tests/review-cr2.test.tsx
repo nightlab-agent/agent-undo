@@ -1,27 +1,7 @@
 // Tests for 0c47e4d..bdcad69: each probe beside its nearest normal case.
 import { expect, test } from 'claude-code/testing'
+import { editResult } from './engine'
 import { ROOT, bash, edit, repoWorld, start, tick, tool, undo } from './world'
-
-const patchOf = (before: string, after: string) => {
-  // Lines as a diff counts them: a final newline ends the last line, it does not start another.
-  const linesOf = (t: string) => (t === '' ? [] : (t.endsWith('\n') ? t.slice(0, -1) : t).split('\n'))
-  const a = linesOf(before)
-  const b = linesOf(after)
-  let head = 0
-  while (head < a.length && head < b.length && a[head] === b[head]) head++
-  let tail = 0
-  while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++
-  const ctx0 = Math.max(0, head - 3)
-  const lines = [
-    ...a.slice(ctx0, head).map(l => ` ${l}`),
-    ...a.slice(head, a.length - tail).map(l => `-${l}`),
-    ...b.slice(head, b.length - tail).map(l => `+${l}`),
-    ...a.slice(a.length - tail, Math.min(a.length, a.length - tail + 3)).map(l => ` ${l}`),
-  ]
-  const ctxEnd = Math.min(tail, 3)
-  return [{ oldStart: ctx0 + 1, oldLines: head - ctx0 + (a.length - tail - head) + ctxEnd,
-    newStart: ctx0 + 1, newLines: head - ctx0 + (b.length - tail - head) + ctxEnd, lines }]
-}
 
 const held = () => {
   let release = () => {}
@@ -74,10 +54,10 @@ test('for comparison, the same writing call not marked read-only: nothing is rec
 // --- R4 one step later: the hunk-undo path (no test in the repo) ---
 const hunkEdits = (on: Parameters<typeof repoWorld>[0], files: () => Map<string, string>) =>
   on('tool.call', { tool: 'Edit' }, (async (_: unknown, e: { file_path: string; old_string: string; new_string: string }) => {
-    const f = files(); const was = f.get(e.file_path)!; const now = was.replace(e.old_string, e.new_string)
-    f.set(e.file_path, now)
-    return { result: { filePath: e.file_path, oldString: e.old_string, newString: e.new_string, originalFile: was,
-      structuredPatch: patchOf(was, now), userModified: false, replaceAll: false } }
+    const f = files()
+    const { disk, result } = editResult(f.get(e.file_path)!, e)
+    f.set(e.file_path, disk)
+    return { result }
   }) as never)
 test('an Edit hunk undone while a Bash command runs is not recorded as the command\'s change', async ($, on) => {
   let r: { files: Map<string, string> } | undefined

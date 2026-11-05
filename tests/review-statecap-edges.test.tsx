@@ -60,7 +60,7 @@ const world = (on: On) => {
     const was = w.files.get(x.file_path)!
     w.files.set(x.file_path, was.replace(x.old_string, () => x.new_string))
     return { result: { filePath: x.file_path, originalFile: was,
-      structuredPatch: [{ newStart: 1, lines: [`-${x.old_string}`, `+${x.new_string}`] }] } } as never
+      structuredPatch: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: [`-${x.old_string}`, `+${x.new_string}`] }] } } as never
   })
   return w
 }

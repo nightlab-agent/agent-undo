@@ -1,4 +1,5 @@
 import { expect, test } from 'claude-code/testing'
+import { editResult, writeResult } from './engine'
 import type { TestBody } from 'claude-code/testing'
 import { hunksOf, undoHunk } from '../hooks/register'
 
@@ -6,29 +7,6 @@ type On = Parameters<TestBody>[1]
 type $T = Parameters<TestBody>[0]
 
 const ROOT = '/proj'
-
-// A diff of `before` to `after` as the engine's structuredPatch gives it: one hunk per
-// changed run, three lines of context, like Claude Code's own.
-const patchOf = (before: string, after: string) => {
-  // Lines as a diff counts them: a final newline ends the last line, it does not start another.
-  const linesOf = (t: string) => (t === '' ? [] : (t.endsWith('\n') ? t.slice(0, -1) : t).split('\n'))
-  const a = linesOf(before)
-  const b = linesOf(after)
-  let head = 0
-  while (head < a.length && head < b.length && a[head] === b[head]) head++
-  let tail = 0
-  while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++
-  const ctx0 = Math.max(0, head - 3)
-  const lines = [
-    ...a.slice(ctx0, head).map(l => ` ${l}`),
-    ...a.slice(head, a.length - tail).map(l => `-${l}`),
-    ...b.slice(head, b.length - tail).map(l => `+${l}`),
-    ...a.slice(a.length - tail, Math.min(a.length, a.length - tail + 3)).map(l => ` ${l}`),
-  ]
-  const ctxEnd = Math.min(tail, 3)
-  return [{ oldStart: ctx0 + 1, oldLines: head - ctx0 + (a.length - tail - head) + ctxEnd,
-    newStart: ctx0 + 1, newLines: head - ctx0 + (b.length - tail - head) + ctxEnd, lines }]
-}
 
 // The engine beneath: an in-memory disk, and Edit/Write tools that change it and answer
 // with the engine's result shape.
@@ -52,15 +30,12 @@ const world = (on: On, files0: Record<string, string> = {}) => {
     const was = files.get(x.file_path)
     if (x.tool === 'Edit') {
       if (was === undefined || !was.includes(x.old_string!)) return { result: 'String to replace not found', isError: true } as never
-      const now = was.replace(x.old_string!, x.new_string!)
-      files.set(x.file_path, now)
-      return { result: { filePath: x.file_path, oldString: x.old_string, newString: x.new_string, originalFile: was,
-        structuredPatch: patchOf(was, now), userModified: false, replaceAll: false } } as never
+      const { disk, result } = editResult(was, x as Parameters<typeof editResult>[1])
+      files.set(x.file_path, disk)
+      return { result } as never
     }
     files.set(x.file_path, x.content!)
-    return { result: was === undefined
-      ? { type: 'create', filePath: x.file_path, content: x.content, structuredPatch: [], originalFile: null }
-      : { type: 'update', filePath: x.file_path, content: x.content, structuredPatch: patchOf(was, x.content!), originalFile: was } } as never
+    return { result: writeResult(was, x as Parameters<typeof writeResult>[1]) } as never
   })
   return files
 }

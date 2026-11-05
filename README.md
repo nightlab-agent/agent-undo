@@ -142,6 +142,10 @@ came back as committed, and `notes.txt` stayed.
   session, and the list says so: its later writes would look like the next
   command's. A process a command starts with `&` is not seen as a background
   command.
+- When git cannot take a snapshot (a nested repo with no commit, say, or
+  `core.safecrlf` refusing a file), that command is not recorded, and the
+  status line and the list give git's first error line. The next command
+  tries again.
 - A file you save in your editor while a command runs looks like the
   command's. The check above still refuses an undo once you change it again.
 - Every command that runs without a question waits for two git snapshots,

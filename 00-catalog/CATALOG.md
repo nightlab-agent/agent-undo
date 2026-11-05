@@ -28,6 +28,7 @@
 | `tests/lookalike.test.tsx` | Look-alike blocks, and hunks followed through later edits and undos. |
 | `tests/shell-undo.test.tsx` | A shell undo where a file, a link or a git filter stands in the way. |
 | `tests/background.test.tsx` | Recording stops when a command goes on in the background, and what starts it again. |
+| `tests/git-fails.test.tsx` | A snapshot git refuses: what the person is told. |
 | `tests/old-git.test.tsx` | Shell recording stops where git cannot name the private index. |
 | `tests/world.tsx` | The test world for the Bash record: an in-memory repo, a strict fake git, the permission question. |
 | `tests/git-snapshot.sh` | The Bash record's git commands on a real scratch repo. |

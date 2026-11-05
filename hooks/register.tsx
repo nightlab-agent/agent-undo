@@ -5,7 +5,7 @@ import type { Change, Hunk } from '../types'
 import { acrossUndo, followed, hunksFrom, onceIn, undoAt } from './hunks'
 import type { Move, Patch } from './hunks'
 import { editing, fileKey, forgetRestore, record, restoreList, serial, showNewest, slashed, snapped, time, updateList } from './common'
-import { ownTool, registerShell, shellStopped, spelled, undoShell } from './shell'
+import { ownTool, registerShell, shellNote, spelled, undoShell } from './shell'
 
 // The session's list (the same plugin, key and shape in each file that reads or writes it: the
 // engine's scan lists a module's state per file). Change the tag in both (and SHAPE in common.tsx) when a Change's
@@ -69,7 +69,8 @@ const counted = (h: Hunk) => {
 
 /** The list, newest change first, each hunk numbered `<change>.<hunk>`. */
 export const listing = (list: readonly Change[], shown: (file: string) => string, limit = 20): string => {
-  if (list.length === 0) return `agent-undo: no edits by Claude in this session yet.${shellStopped() ? `\nShell commands are no longer recorded in this session: ${shellStopped()}.` : ''}`
+  const note = shellNote()
+  if (list.length === 0) return `agent-undo: no edits by Claude in this session yet.${note ? `\n${note}` : ''}`
   const out: string[] = []
   for (const c of [...list].reverse().slice(0, limit)) {
     const who = c.agent ? ` (subagent ${c.agent.slice(0, 8)})` : ''
@@ -91,7 +92,7 @@ export const listing = (list: readonly Change[], shown: (file: string) => string
     })
   }
   if (list.length > limit) out.push(`… ${list.length - limit} older`)
-  if (shellStopped()) out.push(`Shell commands are no longer recorded in this session: ${shellStopped()}.`)
+  if (note) out.push(note)
   const newest = list[list.length - 1]!.n
   out.push(`Undo one: /agent-undo ${newest}.1   all of #${newest}: /agent-undo ${newest}`)
   return out.join('\n')

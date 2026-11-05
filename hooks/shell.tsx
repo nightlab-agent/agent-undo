@@ -1,7 +1,7 @@
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Change, ShellFile } from '../types'
-import { beginRecord, endRecord, fileKey, forgetRestore, inFlight, mirrorEnding, record, saved, slashed, time, touched, updateList, windows } from './common'
+import { beginRecord, endRecord, fileKey, forgetRestore, inFlight, mirrorEnding, record, saved, showNewest, slashed, time, touched, updateList, windows } from './common'
 
 // The session's list is changed only through common.tsx (updateList), which mirrors it to the store.
 
@@ -91,20 +91,39 @@ const onIndex = <T,>(f: () => Promise<T>): Promise<T> => {
   snaps = p.catch(() => undefined)
   return p
 }
+/** git's own line for a failure, at most 120 characters: its first `error:` or `fatal:` line (a warning can stand before
+ * one), or its first line. */
+const gitSaid = (err: unknown) => {
+  const lines = String((err as Error)?.message ?? err).split('\n').map(l => l.trim())
+  return [...(lines.find(l => /^(?:error|fatal):/.test(l)) ?? lines[0] ?? '')].slice(0, 120).join('')
+}
+/** What git said when the newest snapshot failed. Each call tries again, and one that works clears this. */
+let failed: string | undefined
 function snapshot(repo: Repo, $: EngineInterface): Promise<string> {
   return onIndex(async () => {
   const once = async () => {
     await git($, ['add', '-A'], repo.top, repo.env)
     return (await git($, ['write-tree'], repo.top, repo.env)).trim()
   }
-  try {
-    return await once()
-  } catch {
-    // `git gc` removes objects only the private index names (it does not know the index), and
-    // write-tree then fails: seed it again from the real index, or empty it, and try once more.
+  // `git gc` removes objects only the private index names (it does not know the index), and
+  // write-tree then fails: seed it again from the real index, or empty it, and try once more.
+  const again = async () => {
     const r = repo.real ? await $.process.run(['cp', repo.real, repo.index], { cwd: repo.top }).catch(() => undefined) : undefined
     if (!r || r.exitCode !== 0) await git($, ['read-tree', '--empty'], repo.top, repo.env)
-    return await once()
+    return once()
+  }
+  try {
+    const tree = await once().catch(again)
+    if (failed !== undefined) {
+      failed = undefined
+      try { $.ui.status(undefined) } catch {}
+      void showNewest($).catch(() => {})
+    }
+    return tree
+  } catch (err) {
+    failed = gitSaid(err)
+    try { $.ui.status(`agent-undo: last command not recorded: ${failed} · /agent-undo`) } catch {}
+    throw err
   }
   })
 }
@@ -250,7 +269,7 @@ export async function undoShell($: EngineInterface, c: Change, h: number | undef
       f.undone = true
       undone.push(k)
     } catch (err) {
-      notes.push(`${ref} left as is: git said ${String((err as Error).message ?? err).split('\n')[0]}`)
+      notes.push(`${ref} left as is: git said ${gitSaid(err)}`)
     }
   }
   if (undone.length > 0) {
@@ -342,14 +361,16 @@ async function around<D extends Done>($: EngineInterface, rawId: unknown, agent:
 /** A new conversation (the process going on after /clear or a resume) starts with no shell state. */
 const resetShells = () => {
   stopped = undefined
+  failed = undefined
   for (const sh of shells) end(sh)
   pending.clear()
   asked.clear()
   running.clear()
 }
 
-/** Why shell commands are no longer recorded in this session, if they are not. */
-export const shellStopped = () => stopped
+/** The list's line when shell commands are not being recorded, if they are not. */
+export const shellNote = () => (stopped ? `Shell commands are no longer recorded in this session: ${stopped}.`
+  : failed !== undefined ? `The last command was not recorded: git said ${failed}.` : undefined)
 
 /** The Bash hooks: the first snapshot at the engine's decision, the second after the command. */
 export const registerShell = (on: Parameters<Register>[0]) => {

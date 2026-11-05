@@ -77,5 +77,20 @@ fresh; printf '*.nb filter=strip\n' > .gitattributes
 [ "$(git check-attr -z filter -- n.nb | tr '\0' ' ')" = 'n.nb filter strip ' ] || fail "check-attr: filter set"
 [ "$(git check-attr -z filter -- a.txt | tr '\0' ' ')" = 'a.txt filter unspecified ' ] || fail "check-attr: no filter"
 
+# 9. What makes a snapshot fail, and git's own words (tests/git-fails.test.tsx replays them): exit 128, first line first.
+adds() { GIT_INDEX_FILE="$IDX" git add -A 2>"$D/err"; }
+fresh; mkdir sub; (cd sub && git init -q)
+adds; [ $? -eq 128 ] || fail "nested repo with no commit: git add exit changed"
+[ "$(head -n 1 "$D/err")" = "error: 'sub/' does not have a commit checked out" ] || fail "nested repo: git said [$(cat "$D/err")]"
+[ "$(sed -n 2p "$D/err")" = 'fatal: adding files failed' ] || fail "nested repo, second line: [$(cat "$D/err")]"
+fresh; git config core.autocrlf input; git config core.safecrlf true; printf 'x\r\ny\r\n' > c.txt
+adds; [ $? -eq 128 ] || fail "safecrlf: git add exit changed"
+[ "$(cat "$D/err")" = 'fatal: CRLF would be replaced by LF in c.txt' ] || fail "safecrlf: git said [$(cat "$D/err")]"
+# A warning with exit 0 is no failure, and is not shown.
+fresh; git config core.autocrlf input; git config core.safecrlf warn; printf 'x\r\ny\r\n' > c.txt
+adds || fail "safecrlf warn: git add failed: [$(cat "$D/err")]"
+grep -q '^warning:' "$D/err" || fail "safecrlf warn: no warning: [$(cat "$D/err")]"
+
+echo "PASS git add's failures: a nested repo with no commit, core.safecrlf; a warning alone is no failure"
 echo "PASS a deleted file's folder replaced by git; check-attr's answer"
 echo "PASS checkout --, restore, reset --hard, clean -fd, stash -u: the person's uncommitted work comes back; clean -fdx: an ignored file is not recorded (the limit)"

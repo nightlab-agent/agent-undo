@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- When git cannot take a snapshot, the status line and the list give git's first error line. Before, a failed
+  `git add -A` (a nested repo with no commit, `core.safecrlf` refusing a file) turned off the Bash and MCP record with
+  no word. Each command still tries again, and the line goes once one works (`tests/git-fails.test.tsx`, git's words
+  from `tests/git-wipe.sh`; not seen on a screen).
 - A Monitor command now stops recording the way a background Bash command does. Before, it went on running and its
   writes were listed under the next command. A Monitor on a socket runs no command here and changes nothing
   (`tests/background.test.tsx`; the tool's input and answer are from the declarations, no real Monitor was run).

@@ -25,6 +25,8 @@ export type Script = (f: Map<string, string>) => unknown
 export type Repo = {
   files: Map<string, string>
   runs: string[][]
+  /** What each `$.ui.status` was given, oldest first. */
+  status: string[]
   /** Each process with the index it was given, for a check that the person's index is never written. */
   envs: { argv: string[]; index?: string }[]
   /** What `rev-parse --path-format=absolute --git-path ...` answers instead of the two absolute paths. */
@@ -33,6 +35,9 @@ export type Repo = {
   scripts: Record<string, Script>
   adds: number
   onAdd?: (n: number) => Promise<void> | void
+  /** What `git add -A` fails with (exit 128), the same words every time; `addsOk` lets that many succeed first. */
+  addFails?: string
+  addsOk?: number
   /** The verdict core gives a Bash call; "ask" runs `person` first, as the person would while the question waits. */
   verdict: 'allow' | 'ask' | 'deny'
   person?: Script
@@ -55,7 +60,7 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
   const IDX = `${top}/.git/agent-undo.index`
   const repo: Repo = {
     files: new Map(Object.entries(files0).map(([k, v]) => [`${ROOT}/${k}`, v])),
-    runs: [], envs: [], git: opts.git ?? true, scripts: {}, adds: 0, verdict: 'allow', locked: false, pruned: false, links: new Set(), filters: {}, tools: {},
+    runs: [], envs: [], status: [], git: opts.git ?? true, scripts: {}, adds: 0, verdict: 'allow', locked: false, pruned: false, links: new Set(), filters: {}, tools: {},
   }
   const trees = new Map<string, Map<string, string>>()
   const rel = (p: string) => p.slice(ROOT.length + 1)
@@ -66,7 +71,7 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('command.register', () => ({ value: { command: 'agent-undo' } }))
   on('tool.register', () => ({ value: undefined }) as never)
-  on('ui.status', () => ({ value: undefined }) as never)
+  on('ui.status', (_, e) => { repo.status.push(String(e.text)); return { value: undefined } as never })
   if (repo.git) repo.files.set(`${ROOT}/.git/index`, 'real index')
   on('fs.exists', (_, e) => ({ value: repo.files.has(real(e.path)) }))
   // As the engine's stat: rejects for a missing path, so also below a file; a folder is any path with files under it.
@@ -96,6 +101,7 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
     if (s === 'git add -A' && (own || repo.gitPaths !== undefined)) {
       repo.adds++
       if (repo.onAdd) await repo.onAdd(repo.adds)
+      if (repo.addFails !== undefined && repo.adds > (repo.addsOk ?? 0)) return fail(repo.addFails)
       return ok()
     }
     if (s === 'git write-tree' && own && repo.pruned) return fail('error: invalid object 100644 e700 for \'b.txt\'\nfatal: git-write-tree: error building trees')

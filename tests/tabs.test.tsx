@@ -104,25 +104,39 @@ test('an Edit that deleted a tab line puts the line back', async ($, on) => {
   expect(files.get(at('f.go'))).toBe(GO)
 })
 
+
+const curly = (t: string) => `a\n${t}“b”\n`
+const curlyNow = (t: string) => `a\n${t}“c”\n`
+
 test('a new string the engine changed before writing (curly quotes) never writes spaces for a tab', async ($, on) => {
-  const was = 'a\n\t\u201Cb\u201D\n'
-  const now = 'a\n\t\u201Cc\u201D\n'
-  const files = editWorld(on, { 'f.txt': now })
-  on('tool.call', { tool: 'Edit' }, (() => ({ result: { filePath: at('f.txt'), oldString: '\t\u201Cb\u201D', newString: '\t"c"', originalFile: was,
-    structuredPatch: structuredPatch(was, now), userModified: false, replaceAll: false } })) as never)
+  const files = editWorld(on, { 'f.txt': curly('\t') }, r => ({ ...r, newString: '\t"c"', structuredPatch: structuredPatch(curly('\t'), curlyNow('\t')) }))
   await start($)
-  await edit($, 'f.txt', '\t"b"', '\t"c"')
-  await undo($, '1')
-  expect(files.get(at('f.txt'))).toBe(now)
+  await edit($, 'f.txt', '\t“b”', '\t“c”')
+  expect(await undo($, '1')).toContain('1.1 left as is')
+  expect(files.get(at('f.txt'))).toBe(curlyNow('\t'))
+})
+
+test('the same curly quotes with no tab: the diff holds the file\'s words, and the undo works', async ($, on) => {
+  const files = editWorld(on, { 'f.txt': curly('') }, r => ({ ...r, newString: '"c"', structuredPatch: structuredPatch(curly(''), curlyNow('')) }))
+  await start($)
+  await edit($, 'f.txt', '“b”', '“c”')
+  expect(await undo($, '1')).toContain('undid 1.1')
+  expect(files.get(at('f.txt'))).toBe(curly(''))
 })
 
 test('a result with no original text is listed but not undone: nothing proves what stood there', async ($, on) => {
-  const now = 'a\n  b\n'
-  const files = editWorld(on, { 'f.txt': now })
-  on('tool.call', { tool: 'Edit' }, (() => ({ result: { filePath: at('f.txt'), oldString: 'x', newString: 'y', originalFile: null,
-    structuredPatch: [{ oldStart: 2, oldLines: 1, newStart: 2, newLines: 1, lines: ['-  x', '+  b'] }], userModified: false, replaceAll: false } })) as never)
+  const files = editWorld(on, { 'f.txt': 'a\n  x\n' }, r => ({ ...r, originalFile: null }))
   await start($)
-  await edit($, 'f.txt', 'x', 'y')
-  await undo($, '1')
-  expect(files.get(at('f.txt'))).toBe(now)
+  await edit($, 'f.txt', '  x', '  b')
+  expect(await undo($, '')).toContain('too large')
+  expect(await undo($, '1')).toContain('nothing changed')
+  expect(files.get(at('f.txt'))).toBe('a\n  b\n')
+})
+
+test('a diff that disagrees with the original text is listed but not undone', async ($, on) => {
+  const files = editWorld(on, { 'f.txt': 'a\n  x\n' }, r => ({ ...r, originalFile: 'a\n\tzzz\n' }))
+  await start($)
+  await edit($, 'f.txt', '  x', '  b')
+  expect(await undo($, '1')).toContain('nothing changed')
+  expect(files.get(at('f.txt'))).toBe('a\n  b\n')
 })

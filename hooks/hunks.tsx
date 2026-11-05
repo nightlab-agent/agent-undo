@@ -1,5 +1,6 @@
 // One edit's hunks: taken from the engine's diff and the file's own text, and put back line by line.
-import type { Hunk } from '../types'
+import type { Change, Hunk } from '../types'
+import { fileKey } from './shared'
 
 export type Patch = { oldStart?: number; newStart: number; lines: string[] }[]
 
@@ -34,6 +35,15 @@ export const rowsOf = (text: string): Row[] => {
   return rows
 }
 
+/** Every place `after` stands in `rows`, word for word. */
+const places = (rows: Row[], after: string[]) => {
+  const at: number[] = []
+  for (let i = 0; after.length > 0 && i + after.length <= rows.length; i++) {
+    if (after.every((l, j) => rows[i + j]!.t === l)) at.push(i)
+  }
+  return at
+}
+
 /** A line as the engine's diff shows it: `structuredPatch` is display text, each leading tab two spaces (convertTabs). */
 const shownAs = (line: string) => line.replace(/^\t+/gm, tabs => '  '.repeat(tabs.length))
 
@@ -55,33 +65,37 @@ export const hunksFrom = (patch: Patch, was: unknown, now: string | undefined): 
     h.before = before as string[]
     // A Write keeps the CR of a CRLF `content` in the diff; `next` holds lines without their ending.
     h.after = h.after.map((l, j) => { const t = next[at.next + j]?.t; return t !== undefined && shownAs(t) === l.replace(/\r$/, '') ? t : l })
+    if (now !== undefined) {
+      h.total = next.length
+      if (places(next, h.after).length === 1) h.alone = true
+    }
   }
   return hunks
 }
 
 /**
- * The file's text with one hunk put back as it was, and where, or why not. The hunk's
- * after-lines must still stand in the file, word for word: where the person (or a later edit)
- * changed them, nothing is touched. Found in more than one place, only the place the edit left
- * them counts. Every other line keeps its own line ending.
+ * The file's text with one hunk put back as it was, and where, or why not. The hunk's after-lines must still stand
+ * in the file, word for word, and the place must be provable; every other line keeps its own line ending. Proof is
+ * one of two. The place this mod followed, with the file's length as it followed it: nothing else moved the lines
+ * by a count it can see. Or the lines stood once when the edit left them and stand once now: only they can be these.
+ * Anything else may be a look-alike, and a look-alike is refused: a person's change elsewhere can leave one at the
+ * old place.
  */
 export const undoAt = (text: string, hunk: Hunk): { text: string; at: number } | { refused: string } => {
   const rows = rowsOf(text)
   const crlf = rows.filter(r => r.e === '\r\n').length
   const eol = crlf > rows.filter(r => r.e === '\n').length ? '\r\n' : '\n'
   const { before, after } = hunk
-  const at: number[] = []
-  if (after.length === 0) {
-    if (rows.length > 0) return { refused: 'the file is no longer empty, as the edit left it' }
-    at.push(0)
-  }
-  for (let i = 0; after.length > 0 && i + after.length <= rows.length; i++) {
-    if (after.every((l, j) => rows[i + j]!.t === l)) at.push(i)
-  }
+  if (after.length === 0 && rows.length > 0) return { refused: 'the file is no longer empty, as the edit left it' }
+  const at = after.length === 0 ? [0] : places(rows, after)
   if (at.length === 0) return { refused: 'those lines have changed since the edit' }
   const expected = hunk.line - 1
-  const i = at.length === 1 ? at[0]! : at.includes(expected) ? expected : undefined
-  if (i === undefined) return { refused: `those lines appear ${at.length} times and none where the edit left them` }
+  const followed = at.includes(expected) && (hunk.total === undefined || hunk.total === rows.length)
+  const only = at.length === 1 && (hunk.alone === true || after.length === 0)
+  const i = followed ? expected : only ? at[0]! : undefined
+  if (i === undefined) {
+    return { refused: at.length > 1 ? `those lines appear ${at.length} times and none is proven to be the edit's` : 'lines like those stand elsewhere, not where the edit left them' }
+  }
   const atEnd = i + after.length === rows.length
   const put: Row[] = before.map((t, j) => {
     const e = j < after.length ? rows[i + j]!.e : eol
@@ -99,4 +113,43 @@ export const undoAt = (text: string, hunk: Hunk): { text: string; at: number } |
 export const undoHunk = (text: string, hunk: Hunk): { text: string } | { refused: string } => {
   const got = undoAt(text, hunk)
   return 'refused' in got ? got : { text: got.text }
+}
+
+/** One change to the file's lines: at line index `at`, `cut` lines went and `put` came. */
+export type Move = { at: number; cut: number; put: number }
+
+const movedBy = (patch: Patch, line: number) => {
+  let by = 0
+  for (const p of patch) {
+    let o = (p.oldStart ?? 0) - 1
+    for (const l of p.lines) {
+      if (l[0] === ' ') o++
+      else if (l[0] === '-') { if (o < line) by--; o++ }
+      else if (l[0] === '+' && o <= line) by++
+    }
+  }
+  return by
+}
+
+const tracked = (h: Hunk, line: number, grown: number, rows: Row[] | undefined): Hunk => {
+  const { alone, ...rest } = h
+  const still = alone === true && rows !== undefined && places(rows, h.after).length === 1
+  return { ...rest, line, ...(h.total === undefined ? {} : { total: h.total + grown }), ...(still ? { alone: true } : {}) }
+}
+
+/** Every listed hunk of `file` after a later edit: each moves with the lines above it, whatever happened to the file's
+ * length otherwise stays visible in `total`. With no diff to follow (it timed out), its place is unknown: line 0. */
+export const followed = (list: readonly Change[], file: string, patch: Patch, now: string | undefined): Change[] => {
+  const rows = now === undefined ? undefined : rowsOf(now)
+  const grown = movedBy(patch, Infinity)
+  return list.map(c => (fileKey(c.file) !== fileKey(file) ? c : {
+    ...c, hunks: c.hunks.map(h => tracked(h, patch.length > 0 ? h.line + movedBy(patch, h.line - 1) : 0, grown, rows)),
+  }))
+}
+
+/** One hunk after an undo in its file: `moves` in the order they were made, `text` the file now. */
+export const acrossUndo = (h: Hunk, moves: Move[], text: string): Hunk => {
+  let line = h.line - 1
+  for (const m of moves) if (line >= m.at + m.cut) line += m.put - m.cut
+  return tracked(h, line + 1, moves.reduce((s, m) => s + m.put - m.cut, 0), rowsOf(text))
 }

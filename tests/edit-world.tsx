@@ -9,7 +9,10 @@ type $T = Parameters<TestBody>[0]
 export const ROOT = '/proj'
 export const at = (file: string) => `${ROOT}/${file}`
 
-export const editWorld = (on: On, files0: Record<string, string> = {}) => {
+type Answer = (result: Record<string, unknown>) => Record<string, unknown>
+
+/** `answer` changes a tool's result, for what the fake does not build itself (a diff that timed out). */
+export const editWorld = (on: On, files0: Record<string, string> = {}, answer: Answer = r => r) => {
   const files = new Map(Object.entries(files0).map(([k, v]) => [at(k), v]))
   on('session.root', () => ({ value: ROOT }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
@@ -28,11 +31,11 @@ export const editWorld = (on: On, files0: Record<string, string> = {}) => {
       if (was === undefined || !was.replaceAll('\r\n', '\n').includes(x.old_string!)) return { result: 'String to replace not found', isError: true } as never
       const { disk, result } = editResult(was, x as Parameters<typeof editResult>[1])
       files.set(x.file_path, disk)
-      return { result } as never
+      return { result: answer(result) } as never
     }
     const result = writeResult(was, x as Parameters<typeof writeResult>[1])
     files.set(x.file_path, x.content!)
-    return { result } as never
+    return { result: answer(result) } as never
   })
   return files
 }

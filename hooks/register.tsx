@@ -2,9 +2,9 @@ import { atom, read } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Change, Hunk } from '../types'
-import { hunksFrom, undoAt } from './hunks'
-import type { Patch } from './hunks'
-import { editing, forgetRestore, record, restoreList, serial, showNewest, slashed, snapped, time, updateList } from './common'
+import { acrossUndo, followed, hunksFrom, undoAt } from './hunks'
+import type { Move, Patch } from './hunks'
+import { editing, fileKey, forgetRestore, record, restoreList, serial, showNewest, slashed, snapped, time, updateList } from './common'
 import { ownTool, registerShell, resetShells, shellStopped, spelled, undoShell } from './shell'
 
 // The session's list (the same plugin, key and shape in each file that reads or writes it: the
@@ -103,6 +103,7 @@ async function run($: EngineInterface, args: string): Promise<string> {
   const undone: number[] = []
   const notes: string[] = []
   const hs = c.hunks.map(h => ({ ...h }))
+  const moves: Move[] = []
   // Last hunk first, so each recorded line number still points at its own hunk.
   for (const k of [...picked].sort((a, b) => b - a)) {
     const h = hs[k]!
@@ -111,18 +112,19 @@ async function run($: EngineInterface, args: string): Promise<string> {
     if ('refused' in got) { notes.push(`${c.n}.${k + 1} left as is: ${got.refused}`); continue }
     text = got.text
     undone.push(k)
-    // Later hunks of this edit moved by the lines this one put back.
-    const delta = h.before.length - h.after.length
-    for (const o of hs) if (o !== h && o.line - 1 > got.at) o.line += delta
+    // Every hunk below moved by the lines this one put back, and every hunk's count of the file's lines changed.
+    const { head, minus, plus } = counted(h)
+    moves.push({ at: got.at + head, cut: plus, put: minus })
+    for (const [j, o] of hs.entries()) hs[j] = o === h ? o : acrossUndo(o, moves.slice(-1), text)
   }
   if (undone.length > 0) {
     // An open window (a Bash command or MCP call running now) must not take this undo as its change.
     // editing() also covers a window that opens while the write is in flight.
     // user file: an undo puts the user's own file back as it was.
     await editing(c.file, () => $.fs.write(c.file, text))
-    await updateList($, all => all.map(x => x.n !== c.n ? x : {
-      ...x, hunks: hs.map((h, k) => (undone.includes(k) ? { ...h, undone: true } : h)),
-    }))
+    const hunks = hs.map((h, k) => (undone.includes(k) ? { ...h, undone: true } : h))
+    await updateList($, all => all.map(x => x.n === c.n ? { ...x, hunks }
+      : fileKey(x.file) === fileKey(c.file) ? { ...x, hunks: x.hunks.map(h => acrossUndo(h, moves, text)) } : x))
   }
   const did = undone.length > 0
     ? `undid ${[...undone].sort((a, b) => a - b).map(k => `${c.n}.${k + 1}`).join(', ')} in ${shown(c.file)}`
@@ -159,11 +161,13 @@ export const register: Register = on => {
     try {
       const out = done.deny === undefined && !done.isError ? (done.result as FileOut | undefined) : undefined
       if (!out || out.staged) return done
-      const hunks = hunksFrom(out.structuredPatch ?? [], out.originalFile, editedText(out)) ?? []
+      const now = editedText(out)
+      const patch = out.structuredPatch ?? []
+      const hunks = hunksFrom(patch, out.originalFile, now) ?? []
       await record($, {
         at: new Date().toISOString(), tool: 'Edit', file: out.filePath, agent: e.agentId,
         hunks, ...(hunks.length === 0 ? { tooLarge: true } : {}),
-      })
+      }, list => followed(list, out.filePath, patch, now))
     } catch {
       // A failure of this mod never changes the edit.
     }
@@ -176,11 +180,13 @@ export const register: Register = on => {
       const out = done.deny === undefined && !done.isError ? (done.result as FileOut | undefined) : undefined
       if (!out || out.staged) return done
       const created = out.type === 'create'
-      const hunks = created ? [] : hunksFrom(out.structuredPatch ?? [], out.originalFile, out.content)
+      const patch = out.structuredPatch ?? []
+      const hunks = created ? [] : hunksFrom(patch, out.originalFile, out.content)
       await record($, {
         at: new Date().toISOString(), tool: 'Write', file: out.filePath, agent: e.agentId, hunks: hunks ?? [],
         ...(created ? { created: true } : hunks ? {} : { tooLarge: true }),
-      })
+      // A Write that changed nothing has an empty diff and moved nothing.
+      }, out.content === out.originalFile ? undefined : list => followed(list, out.filePath, patch, out.content))
     } catch {
       // A failure of this mod never changes the write.
     }

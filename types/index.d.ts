@@ -2,7 +2,13 @@
 export type Hunk = {
   before: string[]
   after: string[]
+  /** Where the after-lines stand, 1-based, followed through later edits and undos; 0 once a later change has no diff. */
   line: number
+  /** The file's lines when this was last known, kept in step with later edits and undos. A count that differs at an
+   * undo means someone else changed the file's length. */
+  total?: number
+  /** Set when these after-lines stood once in the file, as far as this mod has seen. */
+  alone?: boolean
   beforeNoEol?: boolean
   afterNoEol?: boolean
   undone?: boolean

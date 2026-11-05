@@ -50,6 +50,11 @@ own diff of that edit, and numbers each hunk:
   If you (or a later edit) changed those lines, or the three lines around
   them, it says so and changes nothing.
   Your edits elsewhere in the file stay.
+- It acts only where it can show the lines are that edit's: the place it
+  followed through later edits, or the one place they stand if they stood once
+  when the edit left them. Where the same lines also stand elsewhere and you
+  changed the file's length, it says so and changes nothing, even if the
+  lines are the right ones.
 - A file Claude created is listed, never deleted.
 - NotebookEdit and other built-in tools are not seen. Bash commands are, in a git
   repo (below).

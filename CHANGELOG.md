@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- An undo no longer reverts a look-alike. Before, one match anywhere in the file was taken, and later
+  edits did not move a hunk's place, so where two blocks read the same the undo could change the block the edit
+  never touched and say it worked. Hunks now follow later edits and undos, and an undo acts only at that
+  place with the file's length as followed, or where the lines stood once and stand once now; otherwise it
+  refuses (`tests/lookalike.test.tsx`; not seen on a screen).
 - On a git older than 2.31, shell commands are no longer recorded, and the list says why. Before,
   git's answer was read by position, so each snapshot staged every change in your real index
   (`tests/old-git.test.tsx`, with a fake git answering as 2.30 is reported to; no older git was run).

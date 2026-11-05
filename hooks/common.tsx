@@ -364,15 +364,15 @@ export { touched }
 /** A change recorded from git snapshots around the call (a Bash command, an MCP tool call): files, not hunks. */
 export const snapped = (c: { tool: string }) => c.tool === 'Bash' || c.tool === 'MCP'
 
-/** Adds one change to the session's list, numbered after the highest so far. */
-export async function record($: EngineInterface, c: Omit<Change, 'n'>) {
+/** Adds one change to the session's list, numbered after the highest so far; `moved` first updates what it moves. */
+export async function record($: EngineInterface, c: Omit<Change, 'n'>, moved?: (list: readonly Change[]) => Change[]) {
   if (!snapped(c)) touched(c.file)
   const lines = c.hunks.reduce((s, h) => s + h.before.length + h.after.length, 0)
   const big = lines > MAX_LINES || (c.files?.length ?? 0) > MAX_FILES || JSON.stringify(c).length > MAX_CHARS
   const kept = big ? { ...c, hunks: [], files: c.files && [], tooLarge: true } : c
   await updateList($, list => {
     const n = list.reduce((m, x) => Math.max(m, x.n), 0) + 1
-    return [...list, { ...kept, n }]
+    return [...(moved ? moved(list) : list), { ...kept, n }]
   })
   await showNewest($)
 }

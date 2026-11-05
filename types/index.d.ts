@@ -16,6 +16,8 @@ export type Hunk = {
 
 /** One file a shell command changed, from git's diff of the work tree before and after it. */
 export type ShellFile = {
+  /** The command left it executable. */
+  exec?: boolean
   path: string
   status: 'M' | 'D' | 'A' | 'T'
   /** The file's blob before the command and after it (absent where it did not exist). */
@@ -32,6 +34,8 @@ export type Change = {
   n: number
   at: string
   tool: 'Edit' | 'Write' | 'Bash' | 'MCP'
+  /** Where `file` really was, when that is not its spelling (through a link). */
+  real?: string
   file: string
   agent?: string
   created?: boolean

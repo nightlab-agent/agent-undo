@@ -4,7 +4,7 @@ import { ROOT, bash, repoWorld, start, undo } from './world'
 // The fake git here answers `rev-parse --path-format=absolute` in the shapes below. No git older than 2.31 ran:
 // "as 2.30" is what the audit reports, and real 2.43 does echo a flag it does not know.
 const addsOutsideThePrivateIndex = (runs: { argv: string[]; index?: string }[], own: string) =>
-  runs.filter(r => r.argv.join(' ') === 'git add -A' && r.index !== own)
+  runs.filter(r => r.argv.join(' ') === 'git add -A' && !r.index?.startsWith(`${own}.`))
 
 const paths: Record<string, string> = {
   'as git 2.30 (the flag echoed, the paths relative)': '--path-format=absolute\n.git/index\n.git/agent-undo.index\n',

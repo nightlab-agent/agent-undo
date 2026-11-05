@@ -10,7 +10,9 @@ export type World2 = { files: Map<string, string>; scripts: Record<string, Scrip
 export const world2 = (on: On, o: { root: string; gitTop: string; prefix: string; tops: string[] }, files0: Record<string, string>): World2 => {
   const { root, gitTop, prefix } = o
   const w: World2 = { files: new Map(Object.entries(files0).map(([k, v]) => [`${root}/${k}`, v])), scripts: {}, runs: [] }
-  const IDX = `${gitTop}/.git/agent-undo.index`
+  const BASE = `${gitTop}/.git/agent-undo.index`
+  // One file per process, named by the hook's own tag.
+  const isIdx = (p?: string) => !!p && p.startsWith(`${BASE}.`)
   const trees = new Map<string, Map<string, string>>()
   const inRepo = (cwd: string) => cwd === root || o.tops.some(t => cwd === t || cwd.startsWith(`${t}/`))
   // Any spelling of a file in the repo, as the session's root spells it.
@@ -25,7 +27,7 @@ export const world2 = (on: On, o: { root: string; gitTop: string; prefix: string
   on('command.register', () => ({ value: { command: 'agent-undo' } }))
   on('tool.register', () => ({ value: undefined }) as never)
   on('ui.status', () => ({ value: undefined }) as never)
-  on('fs.exists', (_, e) => ({ value: e.path === IDX ? false : w.files.has(real(e.path)) }))
+  on('fs.exists', (_, e) => ({ value: isIdx(e.path) ? false : w.files.has(real(e.path)) }))
   on('fs.read', (_, e) => {
     const t = w.files.get(real(e.path))
     if (t === undefined) throw new Error('ENOENT')
@@ -38,9 +40,9 @@ export const world2 = (on: On, o: { root: string; gitTop: string; prefix: string
     const s = a.join(' ')
     const cwd = String(e.init?.cwd ?? '')
     if (a[0] === 'git' && !inRepo(cwd)) return fail('fatal: not a git repository (or any of the parent directories): .git')
-    const own = e.init?.env?.GIT_INDEX_FILE === IDX
+    const own = isIdx(e.init?.env?.GIT_INDEX_FILE)
     if (s === 'git rev-parse --show-toplevel --show-prefix') return ok(`${gitTop}\n${prefix}\n`)
-    if (s === 'git rev-parse --path-format=absolute --git-path index --git-path agent-undo.index') return ok(`${gitTop}/.git/index\n${IDX}\n`)
+    if (s === 'git rev-parse --path-format=absolute --git-path index --git-path agent-undo.index') return ok(`${gitTop}/.git/index\n${BASE}\n`)
     if (a[0] === 'cp') return ok()
     if (s === 'git add -A' && own) return ok()
     if (s === 'git write-tree' && own) {
@@ -61,8 +63,8 @@ export const world2 = (on: On, o: { root: string; gitTop: string; prefix: string
       }
       return ok(out)
     }
-    if (a.slice(0, 3).join(' ') === 'git hash-object --') {
-      const t = w.files.get(`${root}/${a[3]!.slice(prefix.length)}`)
+    if (a[1] === 'hash-object') {
+      const t = w.files.get(`${root}/${a[a.length - 1]!.slice(prefix.length)}`)
       return t === undefined ? fail('fatal: no such file') : ok(`${blob(t)}\n`)
     }
     if (a[1] === 'restore' && a[5]?.startsWith(':(literal)')) {

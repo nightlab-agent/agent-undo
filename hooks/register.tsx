@@ -4,8 +4,9 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Change, Hunk } from '../types'
 import { acrossUndo, followed, hunksFrom, onceIn, undoAt } from './hunks'
 import type { Move, Patch } from './hunks'
-import { editing, fileKey, forgetRestore, record, restoreList, serial, showNewest, slashed, snapped, time, updateList } from './common'
-import { ownTool, registerShell, shellNote, spelled, undoShell } from './shell'
+import { editing, fileKey, forgetRestore, record, restoreList, serial, showNewest, slashed, snapped, time, touched, updateList } from './common'
+import { INDEX_TAG, ownTool, registerShell, shellNote, spelled } from './shell'
+import { undoShell } from './shell-undo'
 
 // The session's list (the same plugin, key and shape in each file that reads or writes it: the
 // engine's scan lists a module's state per file). Change the tag in both (and SHAPE in common.tsx) when a Change's
@@ -44,6 +45,45 @@ const holdsItsBytes = async ($: EngineInterface, file: string, text: string) => 
     return real === text.split('\uFFFD').length - 1
   } catch {
     return false
+  }
+}
+
+/** An Edit or Write run on an attached machine (`_host`, tests/ENGINE-NOTES.md): the file an undo here would touch is another file. */
+const elsewhere = (e: unknown) => {
+  const host = (e as { _host?: unknown })._host
+  return typeof host === 'string' && !['', 'container', 'this-machine'].includes(host.trim())
+}
+
+/** Where a file really is, when that is not how Claude spelled it: a later undo must land on the same file. */
+async function reached($: EngineInterface, file: string) {
+  const real = (await $.fs.stat(file, { resolve: true }).catch(() => undefined))?.realPath
+  return real !== undefined && fileKey(real) !== fileKey(file) ? { real } : {}
+}
+
+/**
+ * The file as `text`, in one step: a temporary copy keeping its permissions, then a rename, so an undo killed
+ * halfway leaves the file whole (`$.fs.write` empties it first). With no `cp` or `mv` to hand, a plain write.
+ * False when the file no longer reads as `was`: a save landed during the undo, and it stays.
+ */
+async function putBack($: EngineInterface, file: string, was: string, text: string) {
+  const real = (await $.fs.stat(file, { resolve: true }).catch(() => undefined))?.realPath ?? file
+  const cut = real.lastIndexOf('/') + 1
+  const tmp = `${real.slice(0, cut)}.agent-undo-${INDEX_TAG}-${real.slice(cut)}`
+  const run = (...argv: string[]) => $.process.run(argv, { cwd: real.slice(0, cut) || '.' }).catch(() => undefined)
+  touched(tmp)
+  if ((await run('cp', '-p', real, tmp))?.exitCode !== 0) {
+    if ((await $.fs.read(file)) !== was) return false
+    await $.fs.write(file, text)
+    return true
+  }
+  try {
+    await $.fs.write(tmp, text)
+    if ((await $.fs.read(file)) !== was) return false
+    const moved = await run('mv', '-f', tmp, real)
+    if (moved?.exitCode !== 0) throw new Error(moved?.stderr.trim() || 'mv failed')
+    return true
+  } finally {
+    await run('rm', '-f', tmp)
   }
 }
 
@@ -117,7 +157,18 @@ async function run($: EngineInterface, args: string): Promise<string> {
   const picked = ref.h === undefined ? c.hunks.map((_, k) => k) : [ref.h - 1]
   if (picked.some(k => !c.hunks[k])) return `agent-undo: #${c.n} has ${c.hunks.length} hunk(s); no ${arg}.`
   if (!(await $.fs.exists(c.file))) return `agent-undo: ${shown(c.file)} is gone; nothing changed.`
-  let text = await $.fs.read(c.file)
+  // The undo must land where the edit landed: a link put there since leads to a file the edit never touched.
+  const lands = await $.fs.stat(c.file, { resolve: true }).catch(() => undefined)
+  if (lands?.realPath ? fileKey(lands.realPath) !== fileKey(c.real ?? c.file) : lands?.isLink) {
+    return `agent-undo: ${shown(c.file)} now leads to another file; nothing changed.`
+  }
+  let text: string
+  try {
+    text = await $.fs.read(c.file)
+  } catch (err) {
+    return `agent-undo: ${shown(c.file)} could not be read (${String((err as Error)?.message ?? err).split('\n')[0]}); nothing changed.`
+  }
+  const was = text
   if (text.includes('\uFFFD') && !(await holdsItsBytes($, c.file, text))) {
     return `agent-undo: ${shown(c.file)} has bytes that are not UTF-8 and writing it would replace them; nothing changed.`
   }
@@ -144,7 +195,7 @@ async function run($: EngineInterface, args: string): Promise<string> {
     // An open window (a Bash command or MCP call running now) must not take this undo as its change.
     // editing() also covers a window that opens while the write is in flight.
     // user file: an undo puts the user's own file back as it was.
-    await editing(c.file, () => $.fs.write(c.file, text))
+    if (!(await editing(c.file, () => putBack($, c.file, was, text)))) return `agent-undo: ${shown(c.file)} changed during this undo; nothing changed.`
     const once = onceIn(text)
     const gone = new Set(undone)
     const hunks = c.hunks.map((o, k) => { const h = acrossUndo(o, moves, once); return gone.has(k) ? { ...h, undone: true } : h })
@@ -164,8 +215,20 @@ const queued = <T,>(e: unknown, f: () => Promise<T>) => {
 }
 
 /** An undo waits for every Edit and Write and holds them all; a listing waits for nothing. */
-const undoing = ($: EngineInterface, args: string) =>
-  (['', 'list'].includes(args.trim()) ? run($, args) : serial(undefined, () => run($, args)))
+const undoing = async ($: EngineInterface, args: string, budgetMs = 10000) => {
+  if (['', 'list'].includes(args.trim())) return run($, args)
+  // A hook has its budget and then the engine goes on without it: an undo still waiting at the end of it gives up,
+  // so it cannot write after an answer that has gone. One that began is seen through.
+  let began = false
+  let late = false
+  const work = serial(undefined, () => { if (late) return Promise.resolve(''); began = true; return run($, args) })
+  const bound = $.clock.sleep(Math.max(0, budgetMs - 1500)).then(() => true, () => false)
+  const out = await Promise.race([work, bound])
+  if (out !== true && out !== false) return out
+  if (out === false || began) return work
+  late = true
+  return 'agent-undo: an edit ahead of this undo is still waiting (at a question, perhaps); nothing changed. Try again in a moment.'
+}
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
@@ -196,12 +259,12 @@ export const register: Register = on => {
     const done = await next(e)
     try {
       const out = done.deny === undefined && !done.isError ? (done.result as FileOut | undefined) : undefined
-      if (!out || out.staged) return done
+      if (!out || out.staged || elsewhere(e)) return done
       const now = editedText(out)
       const patch = out.structuredPatch ?? []
       const hunks = hunksFrom(patch, out.originalFile, now) ?? []
       await record($, {
-        at: new Date().toISOString(), tool: 'Edit', file: out.filePath, agent: e.agentId,
+        at: new Date().toISOString(), tool: 'Edit', file: out.filePath, agent: e.agentId, ...(await reached($, out.filePath)),
         hunks, ...(hunks.length === 0 ? { tooLarge: true } : {}),
       }, list => followed(list, out.filePath, patch, now))
     } catch {
@@ -214,12 +277,12 @@ export const register: Register = on => {
     const done = await next(e)
     try {
       const out = done.deny === undefined && !done.isError ? (done.result as FileOut | undefined) : undefined
-      if (!out || out.staged) return done
+      if (!out || out.staged || elsewhere(e)) return done
       const created = out.type === 'create'
       const patch = out.structuredPatch ?? []
       const hunks = created ? [] : hunksFrom(patch, out.originalFile, out.content)
       await record($, {
-        at: new Date().toISOString(), tool: 'Write', file: out.filePath, agent: e.agentId, hunks: hunks ?? [],
+        at: new Date().toISOString(), tool: 'Write', file: out.filePath, agent: e.agentId, ...(await reached($, out.filePath)), hunks: hunks ?? [],
         ...(created ? { created: true } : hunks ? {} : { tooLarge: true }),
       // A Write that changed nothing has an empty diff and moved nothing.
       }, out.content === out.originalFile ? undefined : list => followed(list, out.filePath, patch, out.content))
@@ -231,10 +294,17 @@ export const register: Register = on => {
 
   registerShell(on)
 
-  on('command.run', { command: 'agent-undo' }, async ($, e) => ({ text: await undoing($, e.args) }))
+  on('command.run', { command: 'agent-undo' }, async ($, e, next) => ({ text: await undoing($, e.args, next.budget?.remainingMs) }))
 
-  on('tool.call', { tool: 'mcp__agent-undo__undo' }, async ($, e) => {
-    const ref = (e as unknown as { ref?: unknown }).ref
-    return { result: await undoing($, typeof ref === 'string' ? ref : '') } as never
+  // A tool served here never reaches the engine's permission step, so that step is asked first. A person's own
+  // /agent-undo needs no such check; Claude's undo goes through only on an allow (a question cannot be put from here).
+  on('tool.call', { tool: 'mcp__agent-undo__undo' }, async ($, e, next) => {
+    const raw = (e as unknown as { ref?: unknown }).ref
+    const ref = typeof raw === 'string' ? raw : ''
+    if (!['', 'list'].includes(ref.trim())) {
+      const { decision } = await $.tool.check({ tool: e.tool as string, input: { ref } })
+      if (decision !== 'allow') return { result: `agent-undo: Claude Code did not allow this undo; nothing changed. You can type /agent-undo ${ref} yourself.` } as never
+    }
+    return { result: await undoing($, ref, next.budget?.remainingMs) } as never
   })
 }

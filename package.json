@@ -29,6 +29,7 @@
     "hooks/hunks.tsx",
     "hooks/shared.tsx",
     "hooks/shell.tsx",
+    "hooks/shell-undo.tsx",
     "types/index.d.ts",
     "CHANGELOG.md"
   ]

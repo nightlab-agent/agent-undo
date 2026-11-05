@@ -1,11 +1,13 @@
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Change, ShellFile } from '../types'
-import { beginRecord, endRecord, fileKey, forgetRestore, inFlight, mirrorEnding, record, saved, showNewest, slashed, time, touched, updateList, windows } from './common'
+import type { ShellFile } from '../types'
+import { beginRecord, endRecord, fileKey, forgetRestore, inFlight, mirrorEnding, record, saved, showNewest, slashed, time, windows } from './common'
 
 // The session's list is changed only through common.tsx (updateList), which mirrors it to the store.
 
 const INDEX = 'agent-undo.index'
+/** This process's own index file beside that name: two sessions on one checkout must not reseed each other's. */
+export const INDEX_TAG = Math.random().toString(36).slice(2, 10)
 const ZERO = /^0+$/
 
 /** The files of `git diff-tree -r -z --no-renames <a> <b>`: each status, path and both blobs. */
@@ -19,6 +21,7 @@ export const filesOf = (out: string): ShellFile[] => {
     const f: ShellFile = { path: parts[k + 1]!, status: status as ShellFile['status'] }
     if (!ZERO.test(a!)) f.before = a
     if (!ZERO.test(b!)) f.after = b
+    if (modeB === '100755') f.exec = true
     const modes = [modeA, modeB]
     if (modes.includes('160000')) f.fixed = 'a submodule'
     else if (modes.includes('120000')) f.fixed = 'a symbolic link'
@@ -40,8 +43,9 @@ type Repo = { top: string; root: string; prefix: string; index: string; real?: s
 export const spelled = (r: { top?: string; root?: string; prefix?: string }, p: string) =>
   r.root !== undefined && r.prefix !== undefined && p.startsWith(r.prefix) ? `${r.root}/${p.slice(r.prefix.length)}` : `${r.top}/${p}`
 
-async function git($: EngineInterface, argv: string[], cwd: string, env?: Record<string, string>) {
-  const r = await $.process.run(['git', ...argv], { cwd, timeoutMs: 20000, ...(env ? { env } : {}) })
+export async function git($: EngineInterface, argv: string[], cwd: string, env?: Record<string, string>) {
+  // A first snapshot of a large repo can take 30 s or more.
+  const r = await $.process.run(['git', ...argv], { cwd, timeoutMs: 60000, ...(env ? { env } : {}) })
   if (r.exitCode !== 0) throw new Error(r.stderr.trim() || `git ${argv[0]} failed`)
   return r.stdout
 }
@@ -61,39 +65,50 @@ const safeIndex = (paths: string[]) => {
  * The repo around the session's folder, its top spelled as the session spells it (git resolves
  * symbolic links; Claude's file paths do not), with the private index seeded once from the real one.
  */
-async function repoOf($: EngineInterface): Promise<Repo | undefined> {
+export async function repoOf($: EngineInterface): Promise<Repo | undefined> {
   try {
     const root = slashed(await $.session.root())
     const [gitTop = '', prefix = ''] = (await git($, ['rev-parse', '--show-toplevel', '--show-prefix'], root)).split('\n')
     const top = slashed(gitTop.trim())
     const paths = (await git($, ['rev-parse', '--path-format=absolute', '--git-path', 'index', '--git-path', INDEX], top)).trim().split('\n')
     if (!top) return undefined
-    const [real, index] = paths
-    if (!real || !index || !safeIndex(paths)) {
+    const [real, base] = paths
+    if (!real || !base || !safeIndex(paths)) {
       stop($, 'git named no private index, and the real one is never written (git 2.31 or newer is needed)', 'agent-undo: shell commands not recorded (needs git 2.31 or newer) · /agent-undo')
       return undefined
     }
+    const index = `${base}.${INDEX_TAG}`
     // A copy of the real index keeps git's file timestamps, so the first snapshot hashes only
     // what changed. Without one (no cp, no commit yet) the first snapshot reads every file.
     if (!(await $.fs.exists(index)) && (await $.fs.exists(real))) {
       await $.process.run(['cp', real, index], { cwd: top }).catch(() => undefined)
+      // What a killed session left behind. A live session's file past this age is seeded again at its next command.
+      const dir = base.slice(0, base.lastIndexOf('/'))
+      await $.process.run(['find', dir, '-maxdepth', '1', '-name', `${INDEX}*`, '-mtime', '+7', '-delete'], { cwd: top }).catch(() => undefined)
     }
+    lastIndex = index
     return { top, root, prefix: prefix.trim(), index, real, env: { GIT_INDEX_FILE: index } }
-  } catch {
+  } catch (err) {
+    // No repo here is the plain case; a repo git refuses (dubious ownership) is said, as a failed snapshot is.
+    if (!/not a git repository|ENOENT/i.test(String((err as Error)?.message ?? err))) {
+      failed = gitSaid(err)
+      try { $.ui.status(`agent-undo: last command not recorded: ${failed} · /agent-undo`) } catch {}
+    }
     return undefined
   }
 }
 
 // Snapshots and restores share one index file, so they take turns; the commands do not wait.
 let snaps: Promise<unknown> = Promise.resolve()
-const onIndex = <T,>(f: () => Promise<T>): Promise<T> => {
+let lastIndex: string | undefined
+export const onIndex = <T,>(f: () => Promise<T>): Promise<T> => {
   const p = snaps.then(f)
   snaps = p.catch(() => undefined)
   return p
 }
 /** git's own line for a failure, at most 120 characters: its first `error:` or `fatal:` line (a warning can stand before
  * one), or its first line. */
-const gitSaid = (err: unknown) => {
+export const gitSaid = (err: unknown) => {
   const lines = String((err as Error)?.message ?? err).split('\n').map(l => l.trim())
   return [...(lines.find(l => /^(?:error|fatal):/.test(l)) ?? lines[0] ?? '')].slice(0, 120).join('')
 }
@@ -230,76 +245,6 @@ const commandLabel = (command: unknown) => {
   const first = String(command ?? '').trim().split('\n')[0] ?? ''
   return first.length > 60 ? `${first.slice(0, 59)}…` : first
 }
-/** The nearest parent of `path` that is no longer a folder: real git would replace it to bring the file back. */
-async function inTheWay($: EngineInterface, top: string, path: string) {
-  const parts = path.split('/').slice(0, -1)
-  for (let i = 1; i <= parts.length; i++) {
-    const parent = parts.slice(0, i).join('/')
-    const s = await $.fs.stat(`${top}/${parent}`).catch(() => undefined)
-    if (!s) return undefined
-    if (s.isLink || s.kind !== 'dir') return parent
-  }
-  return undefined
-}
-
-/** A clean filter (nbstripout, say) can make two different files hash the same, so a hash cannot show the file is unchanged. */
-async function filtered($: EngineInterface, top: string, path: string) {
-  const value = (await git($, ['check-attr', '-z', 'filter', '--', path], top)).split('\0')[2]
-  return value !== undefined && value !== 'unspecified' && value !== 'unset'
-}
-
-/**
- * Puts back files a shell command changed or deleted, each from the tree before the command,
- * only where the file still reads as the command left it (or, deleted, is still absent).
- */
-export async function undoShell($: EngineInterface, c: Change, h: number | undefined, arg: string, shown: (f: string) => string): Promise<string> {
-  const files = (c.files ?? []).map(f => ({ ...f }))
-  if (c.tooLarge || !c.top || !c.tree) return `agent-undo: #${c.n} changed too many files for a file-by-file record; nothing changed.`
-  const picked = h === undefined ? files.map((_, k) => k) : [h - 1]
-  if (picked.some(k => !files[k])) return `agent-undo: #${c.n} has ${files.length} file(s); no ${arg}.`
-  const undone: number[] = []
-  const notes: string[] = []
-  for (const k of picked) {
-    const f = files[k]!
-    const ref = `${c.n}.${k + 1}`
-    const name = shown(spelled(c, f.path))
-    if (f.undone) { notes.push(`${ref} was already undone`); continue }
-    if (f.fixed) { notes.push(`${ref} left as is: ${name} is ${f.fixed}`); continue }
-    if (f.status === 'A') { notes.push(`${ref} left as is: ${name} is a new file; nothing was there before. Delete it yourself if you want it gone.`); continue }
-    try {
-      const there = await $.fs.exists(`${c.top}/${f.path}`)
-      // A stat, not exists: exists says no to a link that leads nowhere, and git would replace it.
-      if (f.status === 'D' && (there || await $.fs.stat(`${c.top}/${f.path}`).catch(() => undefined))) { notes.push(`${ref} left as is: there is a file at ${name} again`); continue }
-      if (f.status === 'D') {
-        const parent = await inTheWay($, c.top, f.path)
-        if (parent !== undefined) { notes.push(`${ref} left as is: ${shown(spelled(c, parent))} is no longer a folder; putting ${name} back would replace it`); continue }
-      }
-      if (f.status !== 'D') {
-        if (await filtered($, c.top, f.path)) { notes.push(`${ref} left as is: ${name} goes through a git filter, which can hide a later change`); continue }
-        const now = there ? (await git($, ['hash-object', '--', f.path], c.top)).trim() : ''
-        if (now !== f.after) { notes.push(`${ref} left as is: ${name} has changed since the ${c.tool === 'MCP' ? 'call' : 'command'}`); continue }
-      }
-      // On the private index: the person's own git may hold the real one's lock.
-      const repo = await repoOf($)
-      if (!repo) throw new Error('the repo is no longer there')
-      // An open window (a Bash command or MCP call running now) must not take this undo as its change.
-      touched(spelled(c, f.path))
-      await onIndex(() => git($, ['restore', `--source=${c.tree}`, '--worktree', '--', `:(literal)${f.path}`], c.top!, repo.env))
-      f.undone = true
-      undone.push(k)
-    } catch (err) {
-      notes.push(`${ref} left as is: git said ${gitSaid(err)}`)
-    }
-  }
-  if (undone.length > 0) {
-    await updateList($, all => all.map(x => (x.n !== c.n ? x : { ...x, files })))
-  }
-  const did = undone.length > 0
-    ? `undid ${undone.map(k => `${c.n}.${k + 1}`).join(', ')}: ${undone.map(k => shown(spelled(c, files[k]!.path))).join(', ')}`
-    : 'nothing changed'
-  return [`agent-undo: ${did}.`, ...notes].join('\n')
-}
-
 type Verdict = { decision: string }
 type Done = { deny?: unknown; isError?: unknown; result?: unknown }
 /** Bash answers with this id when a command goes on (`run_in_background`, or moved there later). */
@@ -405,6 +350,11 @@ export const registerShell = (on: Parameters<Register>[0]) => {
     // The last edit's copy (and the ending list's, and every write passed by, as a /resume back waits for them)
     // lands before the end step, within the chain's short bound (tests/review-pr5.test.tsx).
     try { await saved($, Math.min(1000, next.budget.remainingMs - 250), next.signal, true, true) } catch {}
+    if (e.reason !== 'clear' && e.reason !== 'resume' && lastIndex) {
+      const gone = lastIndex
+      lastIndex = undefined
+      await $.process.run(['rm', '-f', gone]).catch(() => undefined)
+    }
     // The status line names this conversation's newest change; after a /clear it is not the next one's.
     try { $.ui.status(undefined) } catch {}
     return next(e)

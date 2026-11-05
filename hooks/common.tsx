@@ -204,7 +204,11 @@ async function save($: EngineInterface, ending?: { id: string; list: Change[] })
     await drop($, id)
     return
   }
-  for (const c of (await copies($)).filter(c => c.id !== id).slice(0, -(KEEP - 1))) await drop($, c.id)
+  for (const c of (await copies($)).filter(c => c.id !== id).slice(0, -(KEEP - 1))) {
+    // Another session may have saved since the scan: only a stamp still as scanned goes.
+    const now = await $.store.get(atOf(c.id)).catch(() => undefined)
+    if ((typeof now === 'number' ? now : 0) === c.at) await drop($, c.id)
+  }
 }
 
 // Restored once per session id in this process: at the first read or change after a start.

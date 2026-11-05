@@ -15,7 +15,7 @@ test('reads git diff-tree -z: changed, deleted, new, and a path with a space and
   expect(filesOf(out)).toEqual([
     { path: 'src/a.ts', status: 'M', before: A, after: B },
     { path: 'gone.txt', status: 'D', before: A },
-    { path: 'run me.sh', status: 'A', after: B },
+    { path: 'run me.sh', status: 'A', after: B, exec: true },
     { path: 'odd\nname', status: 'M', before: A, after: B },
   ])
 })
@@ -64,7 +64,10 @@ test('the private index is seeded once from the real one, and never the real ind
   await start($)
   await bash($, repo, 'one', f => f.set(`${ROOT}/a.txt`, 'b\n'))
   await bash($, repo, 'two', f => f.set(`${ROOT}/a.txt`, 'c\n'))
-  expect(repo.runs.filter(r => r[0] === 'cp')).toEqual([['cp', `${ROOT}/.git/index`, `${ROOT}/.git/agent-undo.index`]])
+  const cp = repo.runs.filter(r => r[0] === 'cp')
+  expect(cp.length).toBe(1)
+  expect(cp[0]![1]).toBe(`${ROOT}/.git/index`)
+  expect(cp[0]![2]).toStartWith(`${ROOT}/.git/agent-undo.index.`)
 })
 
 test('a file Claude edited with Edit while a shell command ran is left to the Edit record', async ($, on) => {

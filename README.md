@@ -41,7 +41,9 @@ own diff of that edit, and numbers each hunk:
 - Or ask Claude in words: it gets a tool for the same list and undo, and
   tells you what the tool reported. Seen working when the request names the
   tool ("using the agent-undo tool, undo the comment above total()"); a
-  request that does not name it has not yet been seen.
+  request that does not name it has not yet been seen. Claude's undo runs only
+  where Claude Code allows the tool without a question; otherwise it says so,
+  changes nothing, and `/agent-undo` is yours to type.
 - The list shows the newest 20 edits and keeps the newest 300, fewer when they
   are big: the oldest go first so the list stays under the 4 MiB Claude Code
   keeps for it. An edit of more than 4000 lines, or one that alone would fill
@@ -110,8 +112,17 @@ came back as committed, and `notes.txt` stayed.
   real index is never used instead (tested with a fake git that answers as the
   audit reports 2.30 does; no older git was run).
 - A file under a git clean filter (nbstripout, say) is left as it is: a filter can
-  hide a later change. A deleted file whose folder is now a file or a link is
-  left as it is too: git would replace what stands there.
+  hide a later change. So is a file whose bytes differ from what git stored,
+  which is any file git converts on your machine (`core.autocrlf` on Windows,
+  an `$Id$` keyword). A file whose folder is now a file or a link is left as it
+  is too: git would replace what stands there. A deleted file under a filter
+  comes back through it, and the undo says its bytes may differ.
+- In a repo that normalises line endings (`* text=auto`), a file that had CRLF
+  endings before the command comes back with git's endings. Tested the other way
+  round only: a later change of endings is refused.
+- A save in the instant between the last check and the write is lost, as with any two writers: a shell
+  undo's window is one process start, an Edit undo's one file read. A save made
+  earlier, during any wait, is seen and refused (`tests/release-audit.test.mjs`).
 - A changed or deleted file comes back as it was just before the command,
   your uncommitted changes included. It is put back only if it still reads
   exactly as the command left it (or, if the command deleted it, nothing is
@@ -146,6 +157,8 @@ came back as committed, and `notes.txt` stayed.
   `core.safecrlf` refusing a file), that command is not recorded, and the
   status line and the list give git's first error line. The next command
   tries again.
+- An Edit that waits past Claude Code's 10 s hook budget behind permission
+  questions on the same file lands, but is not listed, so it cannot be undone here.
 - A file you save in your editor while a command runs looks like the
   command's. The check above still refuses an undo once you change it again.
 - Every command that runs without a question waits for two git snapshots,
@@ -157,9 +170,15 @@ came back as committed, and `notes.txt` stayed.
 ## What it writes
 
 - For an Edit or Write undo: the file that edit changed, with only that
-  edit's hunk (or hunks) put back.
+  edit's hunk (or hunks) put back, through a short-lived `.agent-undo-*` file
+  beside it and a rename, so an undo killed halfway leaves your file whole. A
+  killed undo can leave that file behind; delete it. Where `cp` or `mv` cannot
+  run (Windows without them) it is a plain write. The rename gives the file a
+  new inode, so a hard link to it keeps the old text.
 - In a git repo, around each Bash command: a private index file,
-  `.git/agent-undo.index`, and the snapshots' objects in `.git/objects`
+  `.git/agent-undo.index.<id>`, one per running session and removed when it
+  exits (a killed session's is removed a week later by the next session), and
+  the snapshots' objects in `.git/objects`
   (what `git add` would store; no commit, no branch, no change to your
   staged files). `git gc` removes the objects once they are about two weeks
   old; the next snapshot then copies your index again.
@@ -170,8 +189,8 @@ Claude uses its undo tool, the list is a tool result in the conversation,
 like any other.
 
 To remove it: `/plugin uninstall agent-undo@nightlab-agent-undo`, then
-in each repo or worktree you used it in, delete the file that
-`git rev-parse --git-path agent-undo.index` prints. Optionally
+in each repo or worktree you used it in, delete the files that start with
+what `git rev-parse --git-path agent-undo.index` prints. Optionally
 `/plugin marketplace remove nightlab-agent-undo`.
 
 ## How it works

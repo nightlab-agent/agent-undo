@@ -53,3 +53,11 @@ The mod works out the new file from a result's `originalFile`, `oldString` and `
 against them. A world that answers with a marker string and made-up diff lines leaves an edit with no hunks, and a test
 that only counts entries still passes while testing nothing: the size-cap tests sat at 1 KB of list for that reason. A
 test about size asserts the size it reached.
+
+## What the worlds hide, and where the real thing is tested
+
+`tests/world.tsx` is maps of strings: its `fs.exists` and `hash-object` walk no link, its restore never fails part way
+except where a test wraps it, it knows no permissions or text conversion, it ignores `timeoutMs`, its writes are
+atomic. All of Dex's audit findings A1 to A6 and two panel blockers lived in that gap. So `tests/release-audit.test.mjs`
+runs the compiled hooks on real files, links, modes and git, and is part of `tests/release.sh`. A fault about bytes,
+links, modes or a kill gets its test there, not in the world. No test here runs a real session.

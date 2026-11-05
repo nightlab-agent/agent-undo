@@ -59,7 +59,9 @@ export type Repo = {
 
 export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: boolean; top?: string } = {}): Repo => {
   const top = opts.top ?? ROOT
-  const IDX = `${top}/.git/agent-undo.index`
+  const BASE = `${top}/.git/agent-undo.index`
+  // One file per process, named by the hook's own tag.
+  const isIdx = (p?: string) => !!p && p.startsWith(`${BASE}.`)
   const repo: Repo = {
     files: new Map(Object.entries(files0).map(([k, v]) => [`${ROOT}/${k}`, v])),
     runs: [], envs: [], status: [], git: opts.git ?? true, scripts: {}, adds: 0, verdict: 'allow', locked: false, pruned: false, links: new Set(), folderLinks: {}, filters: {}, tools: {},
@@ -106,11 +108,11 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
     repo.runs.push(a)
     repo.envs.push({ argv: a, ...(e.init?.env?.GIT_INDEX_FILE ? { index: e.init.env.GIT_INDEX_FILE } : {}) })
     const s = a.join(' ')
-    const own = e.init?.env?.GIT_INDEX_FILE === IDX
+    const own = isIdx(e.init?.env?.GIT_INDEX_FILE)
     if (!repo.git) return fail('fatal: not a git repository')
     if (s === 'git rev-parse --show-toplevel --show-prefix') return ok(`${top}\n\n`)
-    if (s === 'git rev-parse --path-format=absolute --git-path index --git-path agent-undo.index') return ok(repo.gitPaths ?? `${top}/.git/index\n${IDX}\n`)
-    if (a[0] === 'cp' && a[1] === `${top}/.git/index` && a[2] === IDX) { repo.files.set(`${ROOT}/.git/agent-undo.index`, 'seeded'); repo.pruned = false; return ok() }
+    if (s === 'git rev-parse --path-format=absolute --git-path index --git-path agent-undo.index') return ok(repo.gitPaths ?? `${top}/.git/index\n${BASE}\n`)
+    if (a[0] === 'cp' && a[1] === `${top}/.git/index` && isIdx(a[2])) { repo.files.set(a[2]!, 'seeded'); repo.pruned = false; return ok() }
     if (s === 'git add -A' && (own || repo.gitPaths !== undefined)) {
       repo.adds++
       if (repo.onAdd) await repo.onAdd(repo.adds)
@@ -138,8 +140,8 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
       return ok(out)
     }
     if (a.slice(0, 4).join(' ') === 'git check-attr -z filter' && a[4] === '--') return ok(`${a[5]}\0filter\0${repo.filters[a[5]!] ?? 'unspecified'}\0`)
-    if (a.slice(0, 3).join(' ') === 'git hash-object --') {
-      const t = repo.files.get(`${ROOT}/${a[3]}`)
+    if (a[1] === 'hash-object') {
+      const t = repo.files.get(`${ROOT}/${a[a.length - 1]}`)
       return t === undefined ? fail('fatal: no such file') : ok(`${blob(t)}\n`)
     }
     if (a[1] === 'restore' && a[2]?.startsWith('--source=') && a[3] === '--worktree' && a[4] === '--' && a[5]?.startsWith(':(literal)')) {

@@ -1,6 +1,27 @@
 # Changelog
 
 ## Unreleased
+- Claude's undo tool now asks Claude Code first. Before, it answered with no permission step, so plan mode and deny
+  rules did not stop it. It goes through only on an allow; otherwise it says so and changes nothing, and `/agent-undo`
+  stays yours (`tests/review-crz.test.tsx`). Listing needs no check.
+- An undo killed halfway no longer empties the file: an Edit or Write undo writes a copy beside it and renames
+  (`tests/release-audit.test.mjs`, a real killed write).
+- An undo no longer follows a link put at the edited path into another file, or replaces a link or linked folder put
+  there since a command. Before, it changed the other file, or swapped the link for a plain file
+  (`tests/release-audit.test.mjs`, real links).
+- A shell undo compares the bytes on disk. Before, git's own hash hid a later change of line endings or an `$Id$`
+  keyword, and the undo wiped it and said it worked. Files git converts are now left as they are. Permissions changed
+  since the command are also refused; before, the undo dropped them.
+- A save made while a shell undo waits behind a snapshot stays. The checks now run after the wait.
+- A shell undo that git leaves unfinished says so, with the command that brings the file back. Before, it said "left
+  as is" after git had already removed the file.
+- Two sessions on one checkout each keep their own private index. Before, one session reseeding the shared file could
+  drop unstaged work from the other's snapshot, and a later undo restored committed text and said it worked.
+- A repo git refuses (dubious ownership) now shows git's line. Before, nothing was recorded and nothing was said.
+- A first snapshot may take 60 s, not 20. A killed one recorded nothing on a large repo.
+- An undo still waiting near the end of its hook budget gives up and says so, instead of writing after its answer.
+- A file too large to read answers with a line instead of an error. A store eviction spares a session saved since the
+  scan. A failed release no longer depends on `tests/release.sh` missing the real-file tests: they run there now.
 - The npm package carries `hooks/hunks.tsx`. A release from before this line would not have loaded: `hooks/register.tsx` imports that file
   and the package's file list left it out. 0.2.2 is not affected. The release check now fails when a packed hook imports an unpacked file.
 - An Edit through a linked folder during a command stays with the Edit. Before, git's real path and the Edit's path

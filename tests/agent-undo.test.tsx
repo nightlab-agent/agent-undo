@@ -163,6 +163,7 @@ test('an unknown number or hunk changes nothing and says so', async ($, on) => {
 test('Claude can list and undo through its own tool, with the same words', async ($, on) => {
   const files = world(on, { [`${ROOT}/app.ts`]: APP })
   on('tool.register', () => ({ value: undefined as never }))
+  on('tool.check', () => ({ decision: 'allow' }) as never)
   await start($)
   await edit($, 'app.ts', '  return 2', '  return 20')
   const listed = (await $.tool.call({ tool: 'mcp__agent-undo__undo', ref: '' } as never)) as { result: string }

@@ -8,7 +8,8 @@
 | `04-memory/log/` | One dated file per working session. |
 | `hooks/register.tsx` | The hooks module: Edit and Write records, the list, `/agent-undo` and Claude's undo tool. |
 | `hooks/hunks.tsx` | One edit's hunks: taken from the engine's diff and the file's text, and put back line by line. |
-| `hooks/shell.tsx` | The Bash record: git snapshots around each command, and the shell undo. |
+| `hooks/shell.tsx` | The Bash record: git snapshots around each command. |
+| `hooks/shell-undo.tsx` | The shell undo: the checks that a file is still the command's, then git restore. |
 | `hooks/common.tsx` | What both share: the list, its stored copy, the record. |
 | `hooks/shared.tsx` | Small things that hold no list: path keys, the clock line, the undo queue, the shell windows. |
 | `types/index.d.ts` | The `$.state` contract. |

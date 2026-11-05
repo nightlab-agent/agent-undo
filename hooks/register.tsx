@@ -36,7 +36,9 @@ const editedText = (o: FileOut): string | undefined => {
  */
 const holdsItsBytes = async ($: EngineInterface, file: string, text: string) => {
   try {
-    const b = Uint8Array.fromBase64((await $.fs.read(file, { as: 'bytes' })).base64)
+    // `$.fs.read` documents this form for its bytes; TypeScript's own libraries leave it out.
+    const decode = Uint8Array as unknown as { fromBase64(base64: string): Uint8Array }
+    const b = decode.fromBase64((await $.fs.read(file, { as: 'bytes' })).base64)
     let real = 0
     for (let i = 0; i + 2 < b.length; i++) if (b[i] === 0xef && b[i + 1] === 0xbf && b[i + 2] === 0xbd) real++
     return real === text.split('\uFFFD').length - 1

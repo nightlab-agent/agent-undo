@@ -46,11 +46,6 @@ export type Change = {
   files?: ShellFile[]
 }
 
-declare global {
-  // The form `$.fs.read`'s `{ as: 'bytes' }` documents; TypeScript's own libraries leave it out.
-  interface Uint8ArrayConstructor { fromBase64(base64: string): Uint8Array }
-}
-
 declare module 'claude-code' {
   interface PluginState {
     'agent-undo': { changes: Shaped<Change[]>; listed: Shaped<string> }

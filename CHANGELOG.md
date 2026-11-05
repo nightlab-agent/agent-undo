@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- An Edit or Write waiting behind a running undo no longer goes on beside it at Claude Code's hook limit, where the undo's write could land over it: it stops itself first and tells the agent to read the file and try again (`tests/release-audit10.test.mjs`, `tests/release-audit11.test.mjs`).
 - An undo waiting its turn no longer outlives its call. Behind an Edit at its question or a running snapshot, an
   interrupt, the end of the conversation or the end of the hook's time now stops it there: it says so at once and
   writes nothing later. Before, a queued undo could land on the next conversation's edit of the same number after a

@@ -22,6 +22,8 @@ node --test tests/release-audit7.test.mjs
 node --test tests/release-audit8.test.mjs
 node --test tests/release-audit9.test.mjs
 node --test tests/release-audit10.test.mjs
+node --test tests/release-audit11.test.mjs
+node --test tests/release-audit12.test.mjs
 sh tests/typecheck.sh
 sh tests/git-wipe.sh
 # The engine's own words on an ask: hooks/register.tsx reads them, the fakes copy them.

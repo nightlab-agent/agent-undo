@@ -5,7 +5,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Change, Hunk } from '../types'
 import { acrossUndo, followed, hunksFrom, onceIn, undoAt } from './hunks'
 import type { Move, Patch } from './hunks'
-import { editing, ended, fileKey, forgetRestore, inTurn, newTurn, record, restoreList, serial, showNewest, slashed, snapped, time, updateList } from './common'
+import { editing, ended, fileKey, forgetRestore, budgetEnds, heldByUndo, inTurn, newTurn, record, restoreList, serial, showNewest, undoAhead, slashed, snapped, time, updateList } from './common'
 import type { Turn, Why } from './shared'
 import { INDEX_TAG, ownTool, registerShell, sessionEnds, shellNote, spelled } from './shell'
 import { undoShell } from './shell-undo'
@@ -233,10 +233,12 @@ const outcome = ($: EngineInterface, args: string, turn: Turn) => run($, args, t
   `agent-undo: this undo stopped: ${firstLine(err)}. Read the file before you try again: it may already be changed.`)
 
 /** An Edit or Write with its entry in the list, in its file's queue: an undo behind it finds the entry. */
-const queued = <T,>(e: unknown, f: () => Promise<T>) => {
+const queued = <T,>($: EngineInterface, e: unknown, next: { budget?: { remainingMs?: number } }, f: () => Promise<T>) => {
   const file = (e as { file_path?: unknown }).file_path
-  return editing(file, () => serial([typeof file === 'string' ? fileKey(file) : ''], f))
+  const key = [typeof file === 'string' ? fileKey(file) : '']
+  return editing(file, () => undoAhead() ? heldByUndo($, key, next.budget, f) : serial(key, f))
 }
+
 
 /** An undo waits for every Edit and Write and holds them all; a listing waits for nothing. */
 // The dialog rejects when dismissed and in a -p run, where no one can answer; free text under Other is not a yes.
@@ -263,22 +265,6 @@ const notUndone: Record<Why, string> = {
   ended: 'agent-undo: the conversation this undo belonged to has ended; nothing changed.',
 }
 
-/**
- * Waits out the hook's own time: the engine's budget stands still during a `$` call, so a wall clock alone would stop
- * an undo on a slow drive. With no budget to read it waits once. The floor keeps a budget paused just above the
- * margin from spinning the clock, and applies only once a look found it had not moved, so a running budget is met on
- * time; the ceiling keeps an unmetered Infinity out of a sleep the engine refuses.
- */
-const budgetEnds = async ($: EngineInterface, left: () => number | undefined, turn: Turn, signal: AbortSignal) => {
-  let ms = (left() ?? 10000) - 1500, floor = 0
-  while (ms > 0) {
-    await $.clock.sleep(Math.min(Math.max(ms, floor), 60000), { signal })
-    const next = (left() ?? 0) - 1500
-    floor = next < ms ? 0 : 250
-    ms = next
-  }
-  turn.say('budget')
-}
 const undoing = async ($: EngineInterface, args: string, left: () => number | undefined, signal?: AbortSignal) => {
   if (['', 'list'].includes(args.trim())) return run($, args)
   // A hook has its budget and then the engine goes on without it, an interrupt ends its call, and a /resume makes its
@@ -326,7 +312,7 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('tool.call', { tool: 'Edit' }, ($, e, next) => queued(e, async () => {
+  on('tool.call', { tool: 'Edit' }, ($, e, next) => queued($, e, next, async () => {
     const done = await next(e)
     try {
       const out = done.deny === undefined && !done.isError ? (done.result as FileOut | undefined) : undefined
@@ -344,7 +330,7 @@ export const register: Register = on => {
     return done
   }))
 
-  on('tool.call', { tool: 'Write' }, ($, e, next) => queued(e, async () => {
+  on('tool.call', { tool: 'Write' }, ($, e, next) => queued($, e, next, async () => {
     const done = await next(e)
     try {
       const out = done.deny === undefined && !done.isError ? (done.result as FileOut | undefined) : undefined

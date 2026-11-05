@@ -192,6 +192,8 @@ came back as committed, and `notes.txt` stayed.
   from WSL. The first can take 30 s or more where there is no git index to
   copy (a repo with no commit yet, or Windows without `cp`).
 
+An Edit or Write held behind a running undo for most of Claude Code's hook time (about 8.5 of 10 seconds) is refused with a line telling the agent to read the file and try again, so the undo cannot land over it.
+
 ## What it writes
 
 - For an Edit or Write undo: the file that edit changed, with only that

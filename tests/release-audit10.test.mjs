@@ -134,8 +134,9 @@ async function world(t, initial = {}, options = {}) {
     const e = { tool: 'Edit', tool_use_id: `tool-${++session}`, ...args }
     const started = Date.now()
     const hook = dispatch('tool.call', e, () => leafOf('Edit', args), () => ({ get remainingMs() { return Math.max(0, HOOK_MS - (Date.now() - started)) } }))
-    const absent = sleep(HOOK_MS).then(async () => { w.absent.push('Edit'); return leafOf('Edit', args) })
-    return Promise.race([hook, absent])
+    const timer = new AbortController()
+    const absent = sleep(HOOK_MS, undefined, { signal: timer.signal }).then(async () => { w.absent.push('Edit'); return leafOf('Edit', args) }, () => undefined)
+    try { return await Promise.race([hook, absent]) } finally { timer.abort() }
   }
   w.undo = async (ref, budgetOf) => {
     const t0 = Date.now()
@@ -171,10 +172,11 @@ for (const callMs of [780, 0]) {
     edited = w.editAsEngine('a.txt', 'keep', 'KEEP').then(r => { landed.open(); return r })
     const out = await undo
     const edit = await edited
-    t.diagnostic(`undo: ${out} | edit result: ${JSON.stringify(edit.result).slice(0, 80)} | absent: ${w.absent} | list: ${w.list().length}`)
-    // Whatever the undo said, an Edit the engine ran and reported as done must be in the file.
+    t.diagnostic(`undo: ${out} | edit: ${JSON.stringify(edit).slice(0, 80)} | absent: ${w.absent} | list: ${w.list().length}`)
+    // An Edit either refused itself in time, or ran and is in the file; the engine never ran it beside the undo.
     const text = await w.read('a.txt')
-    assert.match(text, /KEEP/, `undo said: ${out}; file holds ${JSON.stringify(text)}`)
+    assert.deepEqual(w.absent, [])
+    if (edit.deny === undefined) assert.match(text, /KEEP/, `undo said: ${out}; file holds ${JSON.stringify(text)}`)
   })
 }
 

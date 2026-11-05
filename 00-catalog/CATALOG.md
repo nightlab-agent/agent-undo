@@ -45,6 +45,8 @@
 | `tests/release-audit8.test.mjs` | The budget paused above its margin: no spinning clock. |
 | `tests/release-audit9.test.mjs` | The undo's time bound, on the real compiled hooks with a controllable clock. |
 | `tests/release-audit10.test.mjs` | An Edit queued behind a slow undo: the undo stops before it writes. |
+| `tests/release-audit11.test.mjs` | A write in flight when the Edit behind it runs out of time; a clock correction during an undo. |
+| `tests/release-audit12.test.mjs` | A budget that moves, stands still and jumps. |
 | `tests/review-tsr-after-turn.test.tsx` | A shell undo past its time spends no git call per file. |
 | `tests/native-ask.sh` | The real engine's words on an ask, which hooks/register.tsx reads. |
 | `tests/temp-tools.tsx` | Fake `mktemp`, `cp`, `mv` and `rm` for the plugin test worlds. |

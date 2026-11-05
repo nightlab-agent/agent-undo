@@ -260,12 +260,16 @@ const notUndone: Record<Why, string> = {
   ended: 'agent-undo: the conversation this undo belonged to has ended; nothing changed.',
 }
 
-/** Waits out the hook's own time: the engine's budget stands still during a `$` call, so a wall clock alone would stop an undo on a slow drive. */
-const budgetEnds = async ($: EngineInterface, left: () => number, turn: Turn, signal: AbortSignal) => {
-  for (let ms = left() - 1500; ms > 0; ms = left() - 1500) await $.clock.sleep(ms, { signal })
+/**
+ * Waits out the hook's own time: the engine's budget stands still during a `$` call, so a wall clock alone would stop
+ * an undo on a slow drive. With no budget to read it waits once. The floor keeps a budget paused just above the
+ * margin from spinning the clock; the ceiling keeps an unmetered Infinity out of a sleep the engine refuses.
+ */
+const budgetEnds = async ($: EngineInterface, left: () => number | undefined, turn: Turn, signal: AbortSignal) => {
+  for (let ms = (left() ?? 10000) - 1500; ms > 0; ms = (left() ?? 0) - 1500) await $.clock.sleep(Math.min(Math.max(ms, 250), 60000), { signal })
   turn.say('budget')
 }
-const undoing = async ($: EngineInterface, args: string, left: () => number, signal?: AbortSignal) => {
+const undoing = async ($: EngineInterface, args: string, left: () => number | undefined, signal?: AbortSignal) => {
   if (['', 'list'].includes(args.trim())) return run($, args)
   // A hook has its budget and then the engine goes on without it, an interrupt ends its call, and a /resume makes its
   // "1" another conversation's. So an undo still waiting at any of those gives up, and cannot write after its answer.
@@ -351,7 +355,7 @@ export const register: Register = on => {
 
   registerShell(on)
 
-  on('command.run', { command: 'agent-undo' }, async ($, e, next) => ({ text: await undoing($, e.args, () => next.budget?.remainingMs ?? 10000, next.signal) }))
+  on('command.run', { command: 'agent-undo' }, async ($, e, next) => ({ text: await undoing($, e.args, () => next.budget?.remainingMs, next.signal) }))
 
   // A tool served here never reaches the engine's permission step, so that step is asked first, and where the engine
   // would put a question to the person it is put here. A person's own /agent-undo needs no such check.
@@ -369,6 +373,6 @@ export const register: Register = on => {
         return { result: `agent-undo: Claude Code did not allow this undo; nothing changed. You can type /agent-undo ${ref.trim().slice(0, 40)} yourself.` } as never
       }
     }
-    return { result: await undoing($, ref, () => next.budget?.remainingMs ?? 10000, next.signal) } as never
+    return { result: await undoing($, ref, () => next.budget?.remainingMs, next.signal) } as never
   })
 }

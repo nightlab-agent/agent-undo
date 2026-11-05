@@ -10,7 +10,7 @@
   never comes back no longer holds the queue for good (`tests/release-audit2.test.mjs`,
   `tests/release-audit3.test.mjs`, real files and real git).
 - An undo on a slow drive is no longer refused as out of time: its limit now counts the hook's own time, as Claude Code's
-  does, not the time its tools take (`tests/release-audit7.test.mjs`).
+  does, not the time its tools take (`tests/release-audit7.test.mjs`). While that time stands still it looks again at most four times a second, and with no time to read it waits once (`tests/release-audit8.test.mjs`, `tests/release-audit9.test.mjs`).
 - A shell undo whose time ran out stops at once, with no git call for each file it will not touch
   (`tests/review-tsr-after-turn.test.tsx`).
 - An Edit or Write run on an attached machine is not recorded: this machine cannot restore it. Read from Claude Code's

@@ -9,7 +9,12 @@
 set -e
 cd "$(dirname "$0")/.."
 claude plugin validate .
-claude plugin test .
+# A failing run ends with the failed tests' names, so a tool that shows only the tail still names them.
+out=$(mktemp)
+if ! claude plugin test . >"$out" 2>&1; then
+  cat "$out"; grep -E '^\(fail\)' "$out" | cut -c1-110 | tail -4; rm -f "$out"; exit 1
+fi
+cat "$out"; rm -f "$out"
 node --test tests/mcp-writer.test.mjs
 # Real files, links, permissions and git, where tests/world.tsx has only maps (tests/ENGINE-NOTES.md).
 node --test tests/release-audit.test.mjs

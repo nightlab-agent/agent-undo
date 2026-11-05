@@ -13,7 +13,7 @@ const source = fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '')
 const scratch = await fs.mkdtemp(join(process.env.TMPDIR ?? '/tmp', 'static-budget-'))
 after(() => fs.rm(scratch, { recursive: true, force: true }))
 const compiled = join(scratch, 'compiled')
-const types = process.env.CC_TYPES
+const types = process.env.CC_TYPES ?? join(source, '.claude-plugin/types/claude-code/index.d.ts')
 execFileSync('tsc', ['--target', 'es2023', '--module', 'node16', '--moduleResolution', 'node16', '--jsx', 'react', '--jsxFactory', 'h',
   '--skipLibCheck', '--strict', '--rootDir', source, '--outDir', compiled, types,
   ...['register', 'common', 'shared', 'hunks', 'shell', 'shell-undo'].map(n => join(source, `hooks/${n}.tsx`)),

@@ -39,6 +39,7 @@
 | `tests/release-audit2.test.mjs` | The same on real files: permissions, temporary copies, an undo waiting its turn. |
 | `tests/release-audit3.test.mjs` | The same: a conversation or interrupt during an undo, the queue after one gives up. |
 | `tests/release-audit4.test.mjs` | The same: the turn and the queue under a passed bound, a restore cut short. |
+| `tests/release-audit5.test.mjs` | The same: one undo giving up behind another, the last read, a list changing hands. |
 | `tests/native-ask.sh` | The real engine's words on an ask, which hooks/register.tsx reads. |
 | `tests/temp-tools.tsx` | Fake `mktemp`, `cp`, `mv` and `rm` for the plugin test worlds. |
 | `preview/ask-plugin/` | A second plugin for previews, so a real no can be shown on screen. |

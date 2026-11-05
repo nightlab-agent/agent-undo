@@ -93,8 +93,8 @@ async function putBack($: EngineInterface, file: string, real: string, was: stri
     } catch (err) {
       return `could not be written (${firstLine(err)})`
     }
-    if (turn.why) return `stayed as it was: ${stoppedBy[turn.why]}`
     if (await moved()) return changed
+    if (turn.why) return `stayed as it was: ${stoppedBy[turn.why]}`
     const mv = await run('mv', '-f', tmp, real)
     return mv.exitCode !== 0 ? `could not be put in place (${said(mv)})` : undefined
   } finally {
@@ -216,7 +216,7 @@ async function run($: EngineInterface, args: string, turn = newTurn()): Promise<
     const gone = new Set(undone)
     const hunks = c.hunks.map((o, k) => { const h = acrossUndo(o, moves, once); return gone.has(k) ? { ...h, undone: true } : h })
     // The list is the next conversation's by now, and its numbers are not this one's.
-    if (!turn.gone) await updateList($, all => all.map(x => x.n === c.n ? { ...x, hunks }
+    await updateList($, all => turn.gone ? [...all] : all.map(x => x.n === c.n && x.at === c.at ? { ...x, hunks }
       : fileKey(x.file) === fileKey(c.file) ? { ...x, hunks: x.hunks.map(h => acrossUndo(h, moves, once)) } : x))
   }
   const did = undone.length > 0

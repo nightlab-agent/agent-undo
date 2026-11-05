@@ -159,7 +159,7 @@ export async function undoShell($: EngineInterface, c: Change, h: number | undef
     }
   }
   // The list is the next conversation's by now, and its numbers are not this one's.
-  if (undone.length > 0 && !turn.gone) await updateList($, all => all.map(x => (x.n !== c.n ? x : { ...x, files })))
+  if (undone.length > 0) await updateList($, all => (turn.gone ? [...all] : all.map(x => (x.n === c.n && x.at === c.at ? { ...x, files } : x))))
   const did = undone.length > 0
     ? `undid ${undone.map(k => `${c.n}.${k + 1}`).join(', ')}: ${undone.map(k => shown(spelled(c, files[k]!.path))).join(', ')}`
     : hurt ? 'this undo failed part way' : 'nothing changed'

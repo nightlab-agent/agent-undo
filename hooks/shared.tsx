@@ -19,7 +19,9 @@ let whole: Promise<unknown> = Promise.resolve()
 export const serial = <T,>(keys: readonly string[] | undefined, f: () => Promise<T>, left?: Promise<void>): Promise<T> => {
   const p = Promise.allSettled(keys ? [whole, ...keys.map(k => tails.get(k))] : [whole, ...tails.values()]).then(f)
   const settled = p.catch(() => undefined)
-  const done = left ? Promise.race([settled, left]) : settled
+  // Leaving hands the queue to what stood ahead: a running undo is held only by this link.
+  const ahead = whole
+  const done = left ? Promise.race([settled, left.then(() => ahead)]) : settled
   if (!keys) whole = done
   for (const k of keys ?? []) {
     tails.set(k, done)

@@ -6,12 +6,12 @@
   writes nothing later. Before, a queued undo could land on the next conversation's edit of the same number after a
   `/resume`. An undo that gives up leaves the queue at once, so Edits of other files go on. One that has begun looks
   at its turn again before its write, and a conversation that ends during it leaves the next conversation's list
-  alone. A conversation that ends during the permission check spends the allow too, and a snapshot's git call that
+  alone, read inside the list's own update. A conversation that ends during the permission check spends the allow too, and a snapshot's git call that
   never comes back no longer holds the queue for good (`tests/release-audit2.test.mjs`,
   `tests/release-audit3.test.mjs`, real files and real git).
 - A command that starts during a shell undo waits for the restore, so it cannot list the undo as its own change
   and a later undo of that command cannot reverse it. A command that starts during an Edit undo no longer lists the
-  temporary copy (`tests/release-audit3.test.mjs`, `tests/release-audit4.test.mjs`).
+  temporary copy, outside the instant `mktemp` makes it (`tests/release-audit3.test.mjs`, `tests/release-audit4.test.mjs`).
 - A deleted file whose restore was cut short now reads "failed part way" with the command that brings it back. Before,
   it said "nothing changed" with part of the file on disk (`tests/release-audit4.test.mjs`).
 - If no copy can be made for an undo (a folder you cannot write in, `mktemp`, `cp` or `mv` that cannot run), the undo

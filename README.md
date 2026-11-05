@@ -178,7 +178,8 @@ came back as committed, and `notes.txt` stayed.
   status line and the list give git's first error line. The next command
   tries again.
 - An undo can stop before it writes: interrupted, out of its hook time behind a snapshot or an Edit at its question, or
-  because its conversation ended. It says so and the file stays. One that fails in a way no step expected says
+  because its conversation ended. It says so and the file stays. A many-file undo on a slow disk can stop part way,
+  name the files it left, and finish when you run it again. One that fails in a way no step expected says
   "this undo stopped": read the file before you try again.
 - An Edit that waits past Claude Code's 10 s hook budget behind permission
   questions on the same file lands, but is not listed, so it cannot be undone here.

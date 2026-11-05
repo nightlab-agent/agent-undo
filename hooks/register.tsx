@@ -88,6 +88,7 @@ async function putBack($: EngineInterface, file: string, real: string, was: stri
   return editing(tmp, async () => { try {
     const copy = await run('cp', '-p', real, tmp)
     if (copy.exitCode !== 0) return `could not be copied (${said(copy)})`
+    // user file: the temporary copy beside the user's file, renamed over it or removed.
     // cp -p makes the copy read-only with a read-only file, and the write fails there, as it should.
     try {
       await $.fs.write(tmp, text)

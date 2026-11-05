@@ -42,7 +42,7 @@ own diff of that edit, and numbers each hunk:
   tells you what the tool reported. Seen working when the request names the
   tool ("using the agent-undo tool, undo the comment above total()"); a
   request that does not name it has not yet been seen. Where Claude Code would
-  ask by its permission rules or mode (hooks and the auto-mode classifier are not asked),
+  ask by its permission rules or mode (settings hooks and the auto-mode classifier are not asked; a plugin's own check hook is),
   Claude's undo asks you first; an ask it cannot place is refused; a no, a closed question,
   a conversation that ended meanwhile or a run with no one to answer changes
   nothing, and `/agent-undo` is yours to type. In plan mode it does not ask: it
@@ -77,8 +77,8 @@ own diff of that edit, and numbers each hunk:
   (Claude Code 2.1.312, 2026-11-02): after a resume, the undo tool listed
   the edit made before it; a new session starts with an empty list.
 - Nothing leaves your machine through this mod: it makes no network calls
-  (it runs `git` and small system tools, `cp`, `mv`, `mktemp`, `stat`, `chmod`, `find`
-  and `rm`, on your machine).
+  (it runs `git` and small system tools, `cp`, `mv`, `mktemp`, `stat`, `test`, `chmod`,
+  `find` and `rm`, on your machine).
   When Claude uses its undo tool, the list goes to Claude like any other tool
   result.
 
@@ -154,8 +154,9 @@ came back as committed, and `notes.txt` stayed.
   one has looked, the command is recorded anyway, and a file you save while
   that question waits would look like the command's.
 - Not recorded: two commands running at the same time (for example two
-  subagents), files outside the git repo you started Claude Code in, and
-  files git ignores. Files that Edit or Write changed while a command ran
+  subagents), files outside the git repo you started Claude Code in,
+  files git ignores, and an Edit or Write run on an attached machine rather than
+  this one (read from Claude Code's program, not yet seen on a screen). Files that Edit or Write changed while a command ran
   stay with their own entry.
 - Two Claude Code sessions in one checkout do not know of each other's
   commands: if one session's command runs inside another's, the longer

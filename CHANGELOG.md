@@ -9,6 +9,10 @@
   alone, read inside the list's own update. A conversation that ends during the permission check spends the allow too, and a snapshot's git call that
   never comes back no longer holds the queue for good (`tests/release-audit2.test.mjs`,
   `tests/release-audit3.test.mjs`, real files and real git).
+- A shell undo whose time ran out stops at once, with no git call for each file it will not touch
+  (`tests/review-tsr-after-turn.test.tsx`).
+- An Edit or Write run on an attached machine is not recorded: this machine cannot restore it. Read from Claude Code's
+  program, not yet seen on a screen (`tests/review-crz.test.tsx`).
 - A command that starts during a shell undo waits for the restore, so it cannot list the undo as its own change
   and a later undo of that command cannot reverse it. A command that starts during an Edit undo no longer lists the
   temporary copy, outside the instant `mktemp` makes it (`tests/release-audit3.test.mjs`, `tests/release-audit4.test.mjs`).
@@ -20,7 +24,7 @@
   (`tests/release-audit2.test.mjs`).
 - Where git ignores permissions (`core.filemode` false), a shell undo keeps an executable bit you set; `git restore`
   takes it away and said nothing (`tests/release-audit2.test.mjs`).
-- Claude's undo tool now checks Claude Code's permission rules and mode first (not hooks or the auto-mode classifier).
+- Claude's undo tool now checks Claude Code's permission rules and mode first (not settings hooks or the auto-mode classifier; a plugin's own check hook is asked).
   Before, it answered with no permission step, so plan mode and deny rules did not stop it. An allow goes through;
   where the rules ask, you get the question; a no, a closed question, a deny, an ask of a kind it does not know or a
   run with no one to answer changes nothing, and `/agent-undo` stays yours (`tests/review-crz.test.tsx`,

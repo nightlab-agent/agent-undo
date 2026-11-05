@@ -125,6 +125,7 @@ export async function undoShell($: EngineInterface, c: Change, h: number | undef
     if (f.undone) { notes.push(`${ref} was already undone`); continue }
     if (f.fixed) { notes.push(`${ref} left as is: ${name} is ${f.fixed}`); continue }
     if (f.status === 'A') { notes.push(`${ref} left as is: ${name} is a new file; nothing was there before. Delete it yourself if you want it gone.`); continue }
+    if (turn.why) { notes.push(`${ref} left as is: ${leftBecause[turn.why]}`); continue }
     let restoring = false
     try {
       // On the private index: the person's own git may hold the real one's lock.

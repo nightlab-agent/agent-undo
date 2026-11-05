@@ -70,7 +70,8 @@ for path in sources:
     writes = re.findall(r'\$\.fs\.write\(\s*([^,]+),', text)
     # agent-undo: `c.file` is a file Claude's own Edit or Write changed this session, written back only
     # on the person's /agent-undo (or their ask to Claude); the README says so under "What it writes".
-    loose = [w for w in writes if not re.match(r"""['"`]|`\$\{dir|\$\{""", w.strip()) and 'dir' not in w and w.strip() not in ('c.file', 'file', 'tmp')]
+    # `tmp` is the fresh copy beside that file, moved over it.
+    loose = [w for w in writes if not re.match(r"""['"`]|`\$\{dir|\$\{""", w.strip()) and 'dir' not in w and w.strip() not in ('c.file', 'tmp')]
     check(not loose, f'every write path in {name} is fixed text or under the option folder', str(loose))
 
 if (ROOT / 'CLAUDE.md').is_file():

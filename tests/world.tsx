@@ -25,6 +25,10 @@ export type Script = (f: Map<string, string>) => unknown
 export type Repo = {
   files: Map<string, string>
   runs: string[][]
+  /** Each process with the index it was given, for a check that the person's index is never written. */
+  envs: { argv: string[]; index?: string }[]
+  /** What `rev-parse --path-format=absolute --git-path ...` answers instead of the two absolute paths. */
+  gitPaths?: string
   git: boolean
   scripts: Record<string, Script>
   adds: number
@@ -46,7 +50,7 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
   const IDX = `${top}/.git/agent-undo.index`
   const repo: Repo = {
     files: new Map(Object.entries(files0).map(([k, v]) => [`${ROOT}/${k}`, v])),
-    runs: [], git: opts.git ?? true, scripts: {}, adds: 0, verdict: 'allow', locked: false, pruned: false, tools: {},
+    runs: [], envs: [], git: opts.git ?? true, scripts: {}, adds: 0, verdict: 'allow', locked: false, pruned: false, tools: {},
   }
   const trees = new Map<string, Map<string, string>>()
   const rel = (p: string) => p.slice(ROOT.length + 1)
@@ -69,13 +73,14 @@ export const repoWorld = (on: On, files0: Record<string, string>, opts: { git?: 
   on('process.run', async (_, e) => {
     const a = [...e.argv]
     repo.runs.push(a)
+    repo.envs.push({ argv: a, ...(e.init?.env?.GIT_INDEX_FILE ? { index: e.init.env.GIT_INDEX_FILE } : {}) })
     const s = a.join(' ')
     const own = e.init?.env?.GIT_INDEX_FILE === IDX
     if (!repo.git) return fail('fatal: not a git repository')
     if (s === 'git rev-parse --show-toplevel --show-prefix') return ok(`${top}\n\n`)
-    if (s === 'git rev-parse --path-format=absolute --git-path index --git-path agent-undo.index') return ok(`${top}/.git/index\n${IDX}\n`)
+    if (s === 'git rev-parse --path-format=absolute --git-path index --git-path agent-undo.index') return ok(repo.gitPaths ?? `${top}/.git/index\n${IDX}\n`)
     if (a[0] === 'cp' && a[1] === `${top}/.git/index` && a[2] === IDX) { repo.files.set(`${ROOT}/.git/agent-undo.index`, 'seeded'); repo.pruned = false; return ok() }
-    if (s === 'git add -A' && own) {
+    if (s === 'git add -A' && (own || repo.gitPaths !== undefined)) {
       repo.adds++
       if (repo.onAdd) await repo.onAdd(repo.adds)
       return ok()

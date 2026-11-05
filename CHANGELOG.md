@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- On a git older than 2.31, shell commands are no longer recorded, and the list says why. Before,
+  git's answer was read by position, so each snapshot staged every change in your real index
+  (`tests/old-git.test.tsx`, with a fake git answering as 2.30 is reported to; no older git was run).
 - An edit to tab-indented code can be undone, and an undo gives the tabs back. Claude Code's diff shows a
   leading tab as two spaces, so before, a changed tab line was refused, and a tab changed to spaces came back as
   two spaces while the undo said it worked. Hunks now take their words from the file's own text and the diff

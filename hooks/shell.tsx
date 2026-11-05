@@ -47,6 +47,17 @@ async function git($: EngineInterface, argv: string[], cwd: string, env?: Record
 }
 
 /**
+ * Two absolute paths, different, the second the private file. Before 2.31 git does not know --path-format: it
+ * echoes the flag and prints relative paths, so by position the private index would be the person's own. A
+ * GIT_INDEX_FILE that names the private file makes the two one file. Anything else is not trusted.
+ */
+const safeIndex = (paths: string[]) => {
+  const [real, index] = paths.map(fileKey)
+  const absolute = (p: string) => /^(?:[A-Za-z]:)?\//.test(p)
+  return paths.length === 2 && !!real && !!index && absolute(real) && absolute(index) && real !== index && index.endsWith(`/${INDEX}`)
+}
+
+/**
  * The repo around the session's folder, its top spelled as the session spells it (git resolves
  * symbolic links; Claude's file paths do not), with the private index seeded once from the real one.
  */
@@ -55,8 +66,13 @@ async function repoOf($: EngineInterface): Promise<Repo | undefined> {
     const root = slashed(await $.session.root())
     const [gitTop = '', prefix = ''] = (await git($, ['rev-parse', '--show-toplevel', '--show-prefix'], root)).split('\n')
     const top = slashed(gitTop.trim())
-    const [real, index] = (await git($, ['rev-parse', '--path-format=absolute', '--git-path', 'index', '--git-path', INDEX], top)).trim().split('\n')
-    if (!top || !real || !index) return undefined
+    const paths = (await git($, ['rev-parse', '--path-format=absolute', '--git-path', 'index', '--git-path', INDEX], top)).trim().split('\n')
+    if (!top) return undefined
+    const [real, index] = paths
+    if (!real || !index || !safeIndex(paths)) {
+      stop($, 'git named no private index, and the real one is never written (git 2.31 or newer is needed)', 'agent-undo: shell commands not recorded (needs git 2.31 or newer) · /agent-undo')
+      return undefined
+    }
     // A copy of the real index keeps git's file timestamps, so the first snapshot hashes only
     // what changed. Without one (no cp, no commit yet) the first snapshot reads every file.
     if (!(await $.fs.exists(index)) && (await $.fs.exists(real))) {
@@ -121,6 +137,11 @@ const settle = (id: string, readOnly: boolean) => {
 }
 /** Set when a command went on in the background: its later writes would land in any later record. */
 let stopped: string | undefined
+const stop = ($: EngineInterface, why: string, status: string) => {
+  if (stopped) return
+  stopped = why
+  try { $.ui.status(status) } catch {}
+}
 
 async function begin($: EngineInterface, id: string): Promise<Shell | undefined> {
   if (stopped) return undefined
@@ -259,9 +280,9 @@ async function around<D extends Done>($: EngineInterface, rawId: unknown, agent:
   const sh = take(id)
   // Any command that goes on in the background, recorded or not (one approved at a prompt too),
   // could write into a later command's window.
-  if (done.deny === undefined && (done.result as { backgroundTaskId?: unknown } | undefined)?.backgroundTaskId !== undefined && !stopped) {
-    stopped = `a command went on in the background at ${time(new Date().toISOString())}, and its later writes would land in any later record`
-    try { $.ui.status('agent-undo: shell commands no longer recorded (one runs in the background) · /agent-undo') } catch {}
+  if (done.deny === undefined && (done.result as { backgroundTaskId?: unknown } | undefined)?.backgroundTaskId !== undefined) {
+    stop($, `a command went on in the background at ${time(new Date().toISOString())}, and its later writes would land in any later record`,
+      'agent-undo: shell commands no longer recorded (one runs in the background) · /agent-undo')
   }
   if (!sh) return done
   // From the tool result to record()'s list update the call counts as an edit on its way (the end's wait).

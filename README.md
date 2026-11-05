@@ -100,6 +100,10 @@ tool). Claude rewrote `src/greet.py` in capitals and created `notes.txt`, one
 call each; agent-undo listed them as #1 and #2. Claude undid #1: `greet.py`
 came back as committed, and `notes.txt` stayed.
 
+- Needs git 2.31 or newer. An older git cannot name the private index this
+  record uses, so shell commands are not recorded and the list says so; your
+  real index is never used instead (tested with a fake git that answers as the
+  audit reports 2.30 does; no older git was run).
 - A changed or deleted file comes back as it was just before the command,
   your uncommitted changes included. It is put back only if it still reads
   exactly as the command left it (or, if the command deleted it, nothing is

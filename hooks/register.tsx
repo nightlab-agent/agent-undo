@@ -4,7 +4,8 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Change, Hunk } from '../types'
 import { acrossUndo, followed, hunksFrom, onceIn, undoAt } from './hunks'
 import type { Move, Patch } from './hunks'
-import { editing, fileKey, forgetRestore, record, restoreList, serial, showNewest, slashed, snapped, time, touched, updateList } from './common'
+import { editing, ended, fileKey, forgetRestore, inTurn, newTurn, record, restoreList, serial, showNewest, slashed, snapped, time, touched, updateList } from './common'
+import type { Turn, Why } from './shared'
 import { INDEX_TAG, ownTool, registerShell, sessionEnds, shellNote, spelled } from './shell'
 import { undoShell } from './shell-undo'
 
@@ -152,7 +153,7 @@ export const listing = (list: readonly Change[], shown: (file: string) => string
 
 
 /** What `/agent-undo <args>` and the undo tool answer: the list, or the outcome of one undo. */
-async function run($: EngineInterface, args: string): Promise<string> {
+async function run($: EngineInterface, args: string, turn = newTurn()): Promise<string> {
   const root = slashed(await $.session.root())
   const shown = (f: string) => (slashed(f).startsWith(`${root}/`) ? slashed(f).slice(root.length + 1) : f)
   const arg = args.trim()
@@ -162,7 +163,7 @@ async function run($: EngineInterface, args: string): Promise<string> {
   const ref = parseRef(arg)
   const c = ref && list.find(x => x.n === ref.n)
   if (!ref || !c) return `agent-undo: no edit "${arg}". Type /agent-undo to see the list.`
-  if (snapped(c)) return undoShell($, c, ref.h, arg, shown)
+  if (snapped(c)) return undoShell($, c, ref.h, arg, shown, turn)
   if (c.created) return `agent-undo: #${c.n} created ${shown(c.file)}; nothing was there before. Delete it yourself if you want it gone.`
   if (c.tooLarge) return `agent-undo: #${c.n} was too large for a hunk-by-hunk record; nothing changed.`
   const picked = ref.h === undefined ? c.hunks.map((_, k) => k) : [ref.h - 1]
@@ -221,7 +222,7 @@ async function run($: EngineInterface, args: string): Promise<string> {
 }
 
 /** An undo's outcome line, always: a hook that throws is skipped, and the person would get the engine's words for plugin authors. */
-const outcome = ($: EngineInterface, args: string) => run($, args).catch((err: unknown) =>
+const outcome = ($: EngineInterface, args: string, turn: Turn) => run($, args, turn).catch((err: unknown) =>
   `agent-undo: this undo stopped: ${firstLine(err)}. Read the file before you try again: it may already be changed.`)
 
 /** An Edit or Write with its entry in the list, in its file's queue: an undo behind it finds the entry. */
@@ -249,19 +250,32 @@ const askable = (verdict: { reason?: string; plugin?: string }) =>
 // A conversation ended under an open question: its "1" is not the "1" of what came after, so the yes is spent.
 const sessionId = ($: EngineInterface) => $.session.id().catch(() => undefined)
 
-const undoing = async ($: EngineInterface, args: string, budgetMs = 10000) => {
+const notUndone: Record<Why, string> = {
+  budget: 'agent-undo: an edit ahead of this undo is still waiting (at a question, perhaps); nothing changed. Try again in a moment.',
+  interrupted: 'agent-undo: this undo was interrupted; nothing changed.',
+  ended: 'agent-undo: the conversation this undo belonged to has ended; nothing changed.',
+}
+
+const undoing = async ($: EngineInterface, args: string, budgetMs = 10000, signal?: AbortSignal) => {
   if (['', 'list'].includes(args.trim())) return run($, args)
-  // A hook has its budget and then the engine goes on without it: an undo still waiting at the end of it gives up,
-  // so it cannot write after an answer that has gone. One that began is seen through.
-  let began = false
-  let late = false
-  const work = serial(undefined, () => { if (late) return Promise.resolve(''); began = true; return outcome($, args) })
-  const bound = $.clock.sleep(Math.max(0, budgetMs - 1500)).then(() => true, () => false)
-  const out = await Promise.race([work, bound])
-  if (out !== true && out !== false) return out
-  if (out === false || began) return work
-  late = true
-  return 'agent-undo: an edit ahead of this undo is still waiting (at a question, perhaps); nothing changed. Try again in a moment.'
+  // A hook has its budget and then the engine goes on without it, an interrupt ends its call, and a /resume makes its
+  // "1" another conversation's. So an undo still waiting at any of those gives up, and cannot write after its answer.
+  const turn = newTurn()
+  const interrupted = () => turn.say('interrupted')
+  const conversationEnded = () => turn.say('ended')
+  const stop = new AbortController()
+  if (signal?.aborted) interrupted()
+  signal?.addEventListener('abort', interrupted, { once: true })
+  ended.add(conversationEnded)
+  void $.clock.sleep(Math.max(0, budgetMs - 1500), { signal: stop.signal }).then(() => turn.say('budget'), () => {})
+  const id = sessionId($)
+  try {
+    return await inTurn(turn, job => serial(undefined, job), async () => (await id === await sessionId($) ? outcome($, args, turn) : notUndone.ended), why => notUndone[why])
+  } finally {
+    stop.abort()
+    ended.delete(conversationEnded)
+    signal?.removeEventListener('abort', interrupted)
+  }
 }
 
 export const register: Register = on => {
@@ -328,7 +342,7 @@ export const register: Register = on => {
 
   registerShell(on)
 
-  on('command.run', { command: 'agent-undo' }, async ($, e, next) => ({ text: await undoing($, e.args, next.budget?.remainingMs) }))
+  on('command.run', { command: 'agent-undo' }, async ($, e, next) => ({ text: await undoing($, e.args, next.budget?.remainingMs, next.signal) }))
 
   // A tool served here never reaches the engine's permission step, so that step is asked first, and where the engine
   // would put a question to the person it is put here. A person's own /agent-undo needs no such check.
@@ -336,15 +350,16 @@ export const register: Register = on => {
     const raw = (e as unknown as { ref?: unknown }).ref
     const ref = typeof raw === 'string' ? raw : ''
     if (!['', 'list'].includes(ref.trim())) {
-      // A check that fails is no allow, and a hook that throws would leave the person no line.
-      const verdict = await $.tool.check({ tool: e.tool as string, input: { ref } }).catch((): { decision: string; reason?: string; plugin?: string } => ({ decision: 'failed' }))
+      // Counted before the check: a conversation that ends during it or under the question spends the yes.
       const endsBefore = sessionEnds()
       const idBefore = await sessionId($)
-      if (verdict.decision !== 'allow' && !(verdict.decision === 'ask' && askable(verdict) && await confirmed($, ref)
-        && sessionEnds() === endsBefore && await sessionId($) === idBefore)) {
+      // A check that fails is no allow, and a hook that throws would leave the person no line.
+      const verdict = await $.tool.check({ tool: e.tool as string, input: { ref } }).catch((): { decision: string; reason?: string; plugin?: string } => ({ decision: 'failed' }))
+      const yes = verdict.decision === 'allow' || (verdict.decision === 'ask' && askable(verdict) && await confirmed($, ref))
+      if (!yes || sessionEnds() !== endsBefore || await sessionId($) !== idBefore) {
         return { result: `agent-undo: Claude Code did not allow this undo; nothing changed. You can type /agent-undo ${ref.trim().slice(0, 40)} yourself.` } as never
       }
     }
-    return { result: await undoing($, ref, next.budget?.remainingMs) } as never
+    return { result: await undoing($, ref, next.budget?.remainingMs, next.signal) } as never
   })
 }

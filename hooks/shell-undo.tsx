@@ -1,7 +1,8 @@
 import type { EngineInterface } from 'claude-code'
 
 import type { Change, ShellFile } from '../types'
-import { touched, updateList } from './common'
+import { inTurn, touched, updateList } from './common'
+import type { Turn, Why } from './shared'
 import { git, gitSaid, onIndex, repoOf, spelled } from './shell'
 
 // ---- A shell undo: each file back from the tree before the command, after the checks that it is still the command's.
@@ -99,11 +100,17 @@ async function sameAsLeft($: EngineInterface, top: string, f: ShellFile) {
   return (await $.fs.exists(`${top}/${f.path}`)) && (await git($, ['hash-object', '--no-filters', '--', f.path], top)).trim() === f.after
 }
 
+const leftBecause: Record<Why, string> = {
+  budget: 'a snapshot ahead of this undo is still running. Try again in a moment',
+  interrupted: 'this undo was interrupted',
+  ended: 'the conversation this undo belonged to has ended',
+}
+
 /**
  * Puts back files a shell command changed or deleted, each from the tree before the command,
  * only where the file still reads as the command left it (or, deleted, is still absent).
  */
-export async function undoShell($: EngineInterface, c: Change, h: number | undefined, arg: string, shown: (f: string) => string): Promise<string> {
+export async function undoShell($: EngineInterface, c: Change, h: number | undefined, arg: string, shown: (f: string) => string, turn: Turn): Promise<string> {
   const files = (c.files ?? []).map(f => ({ ...f }))
   if (c.tooLarge || !c.top || !c.tree) return `agent-undo: #${c.n} changed too many files for a file-by-file record; nothing changed.`
   const picked = h === undefined ? files.map((_, k) => k) : [h - 1]
@@ -123,7 +130,7 @@ export async function undoShell($: EngineInterface, c: Change, h: number | undef
       const repo = await repoOf($)
       if (!repo) throw new Error('the repo is no longer there')
       // The checks stand behind the wait for the index: a save made during that wait is seen.
-      const no = await onIndex(async () => {
+      const no = await inTurn<string | undefined>(turn, job => onIndex($, job), async () => {
         // A deleted file has no permissions to keep.
         const had = f.status === 'D' ? { bits: undefined, x: undefined } : await permissions($, c.top!, f.path)
         const why = await refusal($, c, f, name, shown, had)
@@ -135,7 +142,7 @@ export async function undoShell($: EngineInterface, c: Change, h: number | undef
         const lost = await keepBits($, c.top!, f.path, had, name)
         if (lost !== undefined) notes.push(`${ref}: ${lost}`)
         return undefined
-      })
+      }, why => leftBecause[why])
       if (no !== undefined) { notes.push(`${ref} left as is: ${no}`); continue }
       f.undone = true
       undone.push(k)

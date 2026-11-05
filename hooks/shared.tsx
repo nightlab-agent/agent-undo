@@ -29,6 +29,30 @@ export const serial = <T,>(keys: readonly string[] | undefined, f: () => Promise
   return p
 }
 
+/** Why an undo that has not written yet must not write: its budget, an interrupt, or the end of its conversation. */
+export type Why = 'budget' | 'interrupted' | 'ended'
+/** An undo's time to write. `why` is set the moment that time is gone; `over` hands it to whatever waits. */
+export type Turn = { why?: Why; over: Promise<Why>; say: (why: Why) => void }
+export const newTurn = (): Turn => {
+  let answer: (why: Why) => void = () => {}
+  const over = new Promise<Why>(r => { answer = r })
+  const turn: Turn = { over, say: why => { turn.why ??= why; answer(turn.why) } }
+  return turn
+}
+/** `job` in its queue, unless the turn goes first: then `late` answers at once and the job, still waiting, never runs. One that began is seen through. */
+export const inTurn = async <T,>(turn: Turn, queue: (job: () => Promise<T>) => Promise<T>, job: () => Promise<T>, late: (why: Why) => T): Promise<T> => {
+  let began = false
+  const work = queue(async () => {
+    if (turn.why) return late(turn.why)
+    began = true
+    return job()
+  })
+  const first = await Promise.race([work.then(() => undefined), turn.over])
+  return first === undefined || began ? work : late(first)
+}
+/** Run when a conversation ends. */
+export const ended = new Set<() => void>()
+
 /**
  * The files an Edit or Write touched while each shell command ran: theirs, not the command's.
  * Marked when the Edit or Write starts, and an open window takes the ones still running.

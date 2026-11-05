@@ -1,7 +1,7 @@
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { ShellFile } from '../types'
-import { beginRecord, endRecord, fileKey, forgetRestore, inFlight, mirrorEnding, record, saved, showNewest, slashed, time, windows } from './common'
+import { beginRecord, endRecord, ended, fileKey, forgetRestore, inFlight, mirrorEnding, record, saved, showNewest, slashed, time, windows } from './common'
 
 // The session's list is changed only through common.tsx (updateList), which mirrors it to the store.
 
@@ -101,9 +101,15 @@ export async function repoOf($: EngineInterface): Promise<Repo | undefined> {
 // Snapshots and restores share one index file, so they take turns; the commands do not wait.
 let snaps: Promise<unknown> = Promise.resolve()
 let lastIndex: string | undefined
-export const onIndex = <T,>(f: () => Promise<T>): Promise<T> => {
+// Each git call ends at its own timeout, so this bound is for one that never comes back: the queue goes on without it.
+const HOLD_MS = 180000
+export const onIndex = <T,>($: EngineInterface, f: () => Promise<T>): Promise<T> => {
   const p = snaps.then(f)
-  snaps = p.catch(() => undefined)
+  snaps = snaps.then(async () => {
+    const stop = new AbortController()
+    await Promise.race([p.catch(() => undefined), $.clock.sleep(HOLD_MS, { signal: stop.signal }).catch(() => undefined)])
+    stop.abort()
+  })
   return p
 }
 /** git's own line for a failure, at most 120 characters: its first `error:` or `fatal:` line (a warning can stand before
@@ -115,7 +121,7 @@ export const gitSaid = (err: unknown) => {
 /** What git said when the newest snapshot failed. Each call tries again, and one that works clears this. */
 let failed: string | undefined
 function snapshot(repo: Repo, $: EngineInterface): Promise<string> {
-  return onIndex(async () => {
+  return onIndex($, async () => {
   const once = async () => {
     await git($, ['add', '-A'], repo.top, repo.env)
     return (await git($, ['write-tree'], repo.top, repo.env)).trim()
@@ -344,6 +350,7 @@ export const sessionEnds = () => ends
 export const registerShell = (on: Parameters<Register>[0]) => {
   on('session.end', async ($, e, next) => {
     ends += 1
+    for (const f of ended) f()
     resetShells()
     // A /clear or /resume swaps the conversation in this process with no session.start: the next one's
     // list (an id seen before, too) is read from the store again, never taken for already loaded.

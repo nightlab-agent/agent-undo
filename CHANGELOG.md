@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- An undo waiting its turn no longer outlives its call. Behind an Edit at its question or a running snapshot, an
+  interrupt, the end of the conversation or the end of the hook's time now stops it there: it says so at once and
+  writes nothing later. Before, a queued undo could land on the next conversation's edit of the same number after a
+  `/resume`. A conversation that ends during the permission check spends the allow too, and a git call that never
+  comes back no longer holds the queue for good (`tests/release-audit2.test.mjs`, real files and real git).
 - The copy an undo writes has its own name, made fresh, so it can no longer overwrite a file already there or fail on
   a long file name. If no copy can be made (a folder you cannot write in, `mktemp`, `cp` or `mv` that cannot run), the
   undo says so and changes nothing; before, it fell back to the write that empties the file first

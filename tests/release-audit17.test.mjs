@@ -7,6 +7,9 @@ import * as fs from 'node:fs/promises'
 import { join } from 'node:path'
 import { world, wrapRun } from './audit-harness.mjs'
 
+// The permission tests compare with the mode git makes, so they fix the umask: under 000 or 077 an ordinary file needs a chmod.
+process.umask(0o022)
+
 // ---- A shell undo keeps the file's permissions (git recreates the file at the umask mode).
 const mode = async (w, n) => (await fs.stat(join(w.root, n))).mode & 0o7777
 const octal = n => n.toString(8)

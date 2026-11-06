@@ -195,6 +195,13 @@ came back as committed, and `notes.txt` stayed.
 
 An Edit or Write held behind a running undo for most of Claude Code's hook time (about 8.5 of 10 seconds) is refused with a line telling the agent to read the file and try again, so the undo cannot land over it.
 
+## When it is not for you
+
+- You commit after every change. `git restore` and `/rewind` already give you that change back.
+- You approve shell commands at a prompt. A command you approve is not recorded, so its files cannot be undone here. Edit and Write undo still works.
+- You run agents side by side. Two commands running at the same time, for example two subagents, are not recorded.
+- Your repo sits on a git older than 2.31. Shell commands are not recorded, and the list says so.
+
 ## What it writes
 
 - For an Edit or Write undo: the file that edit changed, with only that

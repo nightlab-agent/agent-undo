@@ -362,7 +362,7 @@ export async function updateList($: EngineInterface, f: (list: readonly Change[]
   stop.abort()
 }
 
-export { budgetEnds, editing, ended, fileKey, heldByUndo, inFlight, inTurn, newTurn, serial, slashed, time, undoAhead, windows } from './shared'
+export { budgetEnds, editing, ended, fileKey, heldByUndo, inFlight, inTurn, isCopying, makingCopy, newTurn, serial, slashed, time, undoAhead, windows } from './shared'
 export { touched }
 
 /** A change recorded from git snapshots around the call (a Bash command, an MCP tool call): files, not hunks. */

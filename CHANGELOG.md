@@ -3,7 +3,7 @@
 ## Unreleased
 - A command that runs beside an undo in the same session no longer lists the undo's temporary copy as its own change,
   even in the instant `mktemp` makes it. An undo in another session on the same folder can still show there for that
-  instant (`tests/release-audit5.test.mjs`).
+  instant. A copy left by a killed undo is treated as any other file (`tests/release-audit5.test.mjs`).
 
 ## 0.3.0 - 2026-11-05
 - An Edit or Write waiting behind a running undo no longer goes on beside it at Claude Code's hook limit, where the undo's write could land over it: it stops itself first and tells the agent to read the file and try again (`tests/release-audit10.test.mjs`, `tests/release-audit11.test.mjs`).

@@ -1,18 +1,17 @@
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { ShellFile } from '../types'
-import { beginRecord, endRecord, ended, fileKey, forgetRestore, inFlight, mirrorEnding, record, saved, showNewest, slashed, time, windows } from './common'
+import { beginRecord, endRecord, ended, fileKey, forgetRestore, inFlight, isCopying, mirrorEnding, record, saved, showNewest, slashed, time, windows } from './common'
 
 // The session's list is changed only through common.tsx (updateList), which mirrors it to the store.
 
 const INDEX = 'agent-undo.index'
 /** This process's own index file beside that name: two sessions on one checkout must not reseed each other's. */
 export const INDEX_TAG = Math.random().toString(36).slice(2, 10)
-/** The temporary copy of an undo in this process. mktemp picks the end of the name, so the copy exists for an instant
- * before any mark can hold it. The tag is this process's: no file of the user's matches, and another process's copy is
- * not recognised here. */
+/** The start of the name of an undo's temporary copy. The tag is this process's: another process's copy is not recognised here. */
 export const UNDO_COPY = `.agent-undo-${INDEX_TAG}-`
-const isUndoCopy = (path: string) => path.slice(path.lastIndexOf('/') + 1).startsWith(UNDO_COPY)
+// Only while a copy is being made: one left behind by a killed undo is a file like any other.
+const isUndoCopy = (path: string) => isCopying() && path.slice(path.lastIndexOf('/') + 1).startsWith(UNDO_COPY)
 const ZERO = /^0+$/
 
 /** The files of `git diff-tree -r -z --no-renames <a> <b>`: each status, path and both blobs. */

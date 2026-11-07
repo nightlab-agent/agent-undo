@@ -98,6 +98,23 @@ export const editing = async <T,>(file: unknown, f: () => Promise<T>): Promise<T
 }
 
 /**
+ * Runs an undo's mktemp. The copy exists on disk before its name is known, so while this runs a command's snapshot can
+ * hold a copy no mark covers yet; the mark lands here, before the window closes.
+ */
+let copying = 0
+export const isCopying = () => copying > 0
+export const makingCopy = async <T extends { stdout: string }>(make: () => Promise<T>): Promise<T> => {
+  copying++
+  try {
+    const made = await make()
+    touched(made.stdout.trim())
+    return made
+  } finally {
+    copying--
+  }
+}
+
+/**
  * Waits out the hook's own time: the engine's budget stands still during a `$` call, so a wall clock alone would stop
  * an undo on a slow drive. With no budget to read it waits once. The floor keeps a budget paused just above the
  * margin from spinning the clock, and applies only once a look found it had not moved, so a running budget is met on

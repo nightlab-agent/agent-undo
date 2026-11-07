@@ -27,6 +27,7 @@
     "hooks/register.tsx",
     "hooks/common.tsx",
     "hooks/hunks.tsx",
+    "hooks/labels.tsx",
     "hooks/shared.tsx",
     "hooks/shell.tsx",
     "hooks/shell-undo.tsx",

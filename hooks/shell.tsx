@@ -1,9 +1,12 @@
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { ShellFile } from '../types'
+import { commandLabel, isMcp, mcpLabel } from './labels'
 import { beginRecord, endRecord, ended, fileKey, forgetRestore, inFlight, isCopying, mirrorEnding, record, saved, showNewest, slashed, time, windows } from './common'
 
 // The session's list is changed only through common.tsx (updateList), which mirrors it to the store.
+
+export { isMcp, mcpLabel, ownTool } from './labels'
 
 const INDEX = 'agent-undo.index'
 /** This process's own index file beside that name: two sessions on one checkout must not reseed each other's. */
@@ -240,25 +243,6 @@ const take = (id: unknown) => {
   return sh
 }
 
-/** agent-undo's own model tool, exactly the name `$.tool.register` returned (its undo is not a change to
- * record); until it answers, the name its own hook serves. Only that name: a configured server that
- * happens to be named agent-undo is another server and is recorded. */
-let own = 'mcp__agent-undo__undo'
-export const ownTool = (name: unknown) => { if (typeof name === 'string' && name.startsWith('mcp__')) own = name }
-/** An MCP tool's call, by its wire name, that is not this mod's own. */
-export const isMcp = (tool: unknown): tool is string => typeof tool === 'string' && tool.startsWith('mcp__') && tool !== own
-/** `mcp__filesystem__write_file` as `filesystem write_file`: one line, at most 60 characters. */
-export const mcpLabel = (tool: string) => {
-  const rest = tool.slice('mcp__'.length)
-  const k = rest.indexOf('__')
-  const name = (k < 0 ? rest : `${rest.slice(0, k)} ${rest.slice(k + 2)}`).replace(/[\u0000-\u001f\u007f]/g, ' ')
-  return name.length > 60 ? `${name.slice(0, 59)}…` : name
-}
-
-const commandLabel = (command: unknown) => {
-  const first = String(command ?? '').trim().split('\n')[0] ?? ''
-  return first.length > 60 ? `${first.slice(0, 59)}…` : first
-}
 type Verdict = { decision: string }
 type Done = { deny?: unknown; isError?: unknown; result?: unknown }
 /** Bash answers with this id when a command goes on (`run_in_background`, or moved there later). */

@@ -294,7 +294,7 @@ for (const stop of ['none', 'interrupt', 'end']) test(`shell final hash: ${stop}
   assert.match(out, stop === 'none' ? /undid/ : /nothing changed/)
 })
 
-for (const birthGap of [false, true]) test(`temporary attribution: ${birthGap ? 'mktemp result held' : 'cp held comparison'}`, { todo: birthGap ? 'known limit, the instant between mktemp and its mark' : false }, async t => {
+for (const birthGap of [false, true]) test(`temporary attribution: ${birthGap ? 'mktemp result held' : 'cp held comparison'}`, async t => {
   const w = await world(t, { 'a.txt': 'one\n', 'b.txt': 'two\n' })
   await w.edit('a.txt', 'one', 'ONE')
   const commandStarted = gate(), commandFinish = gate()

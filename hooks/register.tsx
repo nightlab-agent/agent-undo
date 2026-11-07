@@ -7,7 +7,7 @@ import { acrossUndo, followed, hunksFrom, onceIn, undoAt } from './hunks'
 import type { Move, Patch } from './hunks'
 import { editing, ended, fileKey, forgetRestore, budgetEnds, heldByUndo, inTurn, newTurn, record, restoreList, serial, showNewest, undoAhead, slashed, snapped, time, updateList } from './common'
 import type { Turn, Why } from './shared'
-import { INDEX_TAG, ownTool, registerShell, sessionEnds, shellNote, spelled } from './shell'
+import { UNDO_COPY, ownTool, registerShell, sessionEnds, shellNote, spelled } from './shell'
 import { undoShell } from './shell-undo'
 
 // The session's list (the same plugin, key and shape in each file that reads or writes it: the
@@ -81,7 +81,7 @@ async function putBack($: EngineInterface, file: string, real: string, was: stri
     (await $.fs.read(real).catch(() => undefined)) !== was
   const changed = 'changed during this undo'
   // mktemp makes the name its own, however long the file's is, and never takes a name already there.
-  const made = await run('mktemp', `${folder}.agent-undo-${INDEX_TAG}-XXXXXXXX`)
+  const made = await run('mktemp', `${folder}${UNDO_COPY}XXXXXXXX`)
   const tmp = made.stdout.trim()
   if (made.exitCode !== 0 || !tmp) return `could not get a temporary copy beside it (${said(made)})`
   // editing(), not touched(): a window that opens while the copy exists must not take it as a new file.

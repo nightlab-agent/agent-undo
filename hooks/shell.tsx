@@ -8,6 +8,10 @@ import { beginRecord, endRecord, ended, fileKey, forgetRestore, inFlight, mirror
 const INDEX = 'agent-undo.index'
 /** This process's own index file beside that name: two sessions on one checkout must not reseed each other's. */
 export const INDEX_TAG = Math.random().toString(36).slice(2, 10)
+/** The temporary copy of an undo in this session. mktemp picks the end of the name, so the copy exists for an instant
+ * before any mark can hold it; the tag is this session's, so no file of the user's or another session's matches. */
+export const UNDO_COPY = `.agent-undo-${INDEX_TAG}-`
+const isUndoCopy = (path: string) => path.slice(path.lastIndexOf('/') + 1).startsWith(UNDO_COPY)
 const ZERO = /^0+$/
 
 /** The files of `git diff-tree -r -z --no-renames <a> <b>`: each status, path and both blobs. */
@@ -224,7 +228,7 @@ const landed = async ($: EngineInterface, path: string) => {
 /** The files an Edit, Write or undo did not take: `mine` holds each by the path it was given, a link's perhaps, and git
  * names each by its real path under its top. */
 const commandsOwn = async ($: EngineInterface, sh: Shell, all: ShellFile[]) => {
-  const files = all.filter(f => !sh.mine.has(fileKey(spelled(sh.repo, f.path))))
+  const files = all.filter(f => !isUndoCopy(f.path) && !sh.mine.has(fileKey(spelled(sh.repo, f.path))))
   if (files.length === 0 || sh.mine.size === 0) return files
   const theirs = new Set(await Promise.all([...sh.mine].map(k => landed($, k))))
   const top = await landed($, sh.repo.top)

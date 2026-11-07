@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.1 - 2026-11-07
 - README: how to try it first, and that shell recording needs a git repo.
 - A command that runs beside an undo in the same session no longer lists the undo's temporary copy as its own change,
   even in the instant `mktemp` makes it. An undo in another session on the same folder can still show there for that

@@ -294,7 +294,7 @@ for (const stop of ['none', 'interrupt', 'end']) test(`shell final hash: ${stop}
   assert.match(out, stop === 'none' ? /undid/ : /nothing changed/)
 })
 
-for (const birthGap of [false, true]) test(`temporary attribution: ${birthGap ? 'mktemp result held' : 'cp held comparison'}`, { todo: birthGap ? 'known limit, the instant between mktemp and its mark' : false }, async t => {
+for (const birthGap of [false, true]) test(`temporary attribution: ${birthGap ? 'mktemp result held' : 'cp held comparison'}`, async t => {
   const w = await world(t, { 'a.txt': 'one\n', 'b.txt': 'two\n' })
   await w.edit('a.txt', 'one', 'ONE')
   const commandStarted = gate(), commandFinish = gate()
@@ -317,6 +317,23 @@ for (const birthGap of [false, true]) test(`temporary attribution: ${birthGap ? 
   release.open(); await undo
   const list = await w.undo('list')
   assert.doesNotMatch(list, /\.agent-undo-/, 'a command must not claim the undo temporary file')
+})
+
+test('temporary attribution: a copy left by a killed undo is an ordinary file afterwards', async t => {
+  const w = await world(t, { 'a.txt': 'one\n' })
+  await w.edit('a.txt', 'one', 'ONE')
+  const run = w.engine.process.run
+  let left = ''
+  w.engine.process.run = async (a, i) => {
+    if (a[0] !== 'mktemp') return run(a, i)
+    left = (await run(a, i)).stdout.trim()
+    throw new Error('the undo died here')
+  }
+  await w.undo('1')
+  w.engine.process.run = run
+  assert.ok(left, 'mktemp ran')
+  await w.bash(`printf 'later\\n' > '${left}'`)
+  assert.match(await w.undo('list'), /printf/, 'a later command that changes the leftover is recorded')
 })
 
 

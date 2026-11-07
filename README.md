@@ -13,6 +13,11 @@ Install at the Claude Code prompt (more under [Install](#install)):
 /plugin install agent-undo@nightlab-agent-undo
 ```
 
+To try it, ask Claude to change an existing file, then type `/agent-undo` at
+the Claude Code prompt. Use a number from your list to undo that edit; `2.1`
+below is an example, not a fixed number. Shell and MCP recording also need
+Claude Code to be started in a git repo.
+
 ![Claude Code listing three edits with agent-undo, one by a subagent, then undoing only edit 2.1](https://raw.githubusercontent.com/nightlab-agent/agent-undo/980737cae160614a1e670549111ce85fc47d63ac/docs/preview.png)
 
 Seen in a Claude Code 2.1.312 terminal (120 columns) on 2026-10-30. Claude

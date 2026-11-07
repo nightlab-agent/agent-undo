@@ -8,8 +8,9 @@ import { beginRecord, endRecord, ended, fileKey, forgetRestore, inFlight, mirror
 const INDEX = 'agent-undo.index'
 /** This process's own index file beside that name: two sessions on one checkout must not reseed each other's. */
 export const INDEX_TAG = Math.random().toString(36).slice(2, 10)
-/** The temporary copy of an undo in this session. mktemp picks the end of the name, so the copy exists for an instant
- * before any mark can hold it; the tag is this session's, so no file of the user's or another session's matches. */
+/** The temporary copy of an undo in this process. mktemp picks the end of the name, so the copy exists for an instant
+ * before any mark can hold it. The tag is this process's: no file of the user's matches, and another process's copy is
+ * not recognised here. */
 export const UNDO_COPY = `.agent-undo-${INDEX_TAG}-`
 const isUndoCopy = (path: string) => path.slice(path.lastIndexOf('/') + 1).startsWith(UNDO_COPY)
 const ZERO = /^0+$/

@@ -13,7 +13,7 @@ Install at the Claude Code prompt (more under [Install](#install)):
 /plugin install agent-undo@nightlab-agent-undo
 ```
 
-![Claude Code listing one shell command that changed three files with agent-undo, then undoing only the change to src/greet.py](docs/preview-shell.png)
+![Claude Code listing one shell command that changed three files with agent-undo, then undoing only the change to src/greet.py](https://raw.githubusercontent.com/nightlab-agent/agent-undo/082df4e3e23f5b5910c4b1c4a77a18a5ee661157/docs/preview-shell.png)
 
 Seen in a Claude Code 2.1.312 terminal on 2026-11-12, with agent-undo 0.3.1 and permissions bypassed. One Bash
 command uppercased src/greet.py, deleted src/shout.py and created notes.txt. Asked to undo only the change to

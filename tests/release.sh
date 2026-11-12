@@ -15,26 +15,9 @@ if ! claude plugin test . >"$out" 2>&1; then
   cat "$out"; grep -E '^\(fail\)' "$out" | cut -c1-110 | tail -4; rm -f "$out"; exit 1
 fi
 cat "$out"; rm -f "$out"
-node --test tests/mcp-writer.test.mjs
 # Real files, links, permissions and git, where tests/world.tsx has only maps (tests/ENGINE-NOTES.md).
-node --test tests/release-audit.test.mjs
-node --test tests/release-audit2.test.mjs
-node --test tests/release-audit17.test.mjs
-node --test tests/release-audit18.test.mjs
-node --test tests/release-audit3.test.mjs
-node --test tests/release-audit4.test.mjs
-node --test tests/release-audit5.test.mjs
-node --test tests/release-audit6.test.mjs
-node --test tests/release-audit7.test.mjs
-node --test tests/release-audit8.test.mjs
-node --test tests/release-audit9.test.mjs
-node --test tests/release-audit10.test.mjs
-node --test tests/release-audit11.test.mjs
-node --test tests/release-audit12.test.mjs
-node --test tests/release-audit13.test.mjs
-node --test tests/release-audit14.test.mjs
-node --test tests/release-audit15.test.mjs
-node --test tests/release-audit16.test.mjs
+# One node --test run takes the files side by side; each makes its own mkdtemp scratch, none opens a port.
+node --test tests/mcp-writer.test.mjs tests/release-audit*.test.mjs
 sh tests/typecheck.sh
 sh tests/git-wipe.sh
 # The engine's own words on an ask: hooks/register.tsx reads them, the fakes copy them.

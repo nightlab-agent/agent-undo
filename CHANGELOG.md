@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.2 - 2026-11-12
 - README: a picture of one shell command's change undone while the command's other changes stay.
 
 ## 0.3.1 - 2026-11-07

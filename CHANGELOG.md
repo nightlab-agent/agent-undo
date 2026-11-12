@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- README: a picture of one shell command's change undone while the command's other changes stay.
+
 ## 0.3.1 - 2026-11-07
 - README: how to try it first, and that shell recording needs a git repo.
 - A command that runs beside an undo in the same session no longer lists the undo's temporary copy as its own change,
